@@ -29,6 +29,12 @@ function isCompositeObject(value, fieldType) {
       return 'addressStreet1' in value || 'addressCity' in value;
     case 'EMAILS':
       return 'primaryEmail' in value;
+    case 'PHONES':
+      return 'primaryPhoneNumber' in value;
+    case 'CURRENCY':
+      return 'amountMicros' in value;
+    case 'FULL_NAME':
+      return 'firstName' in value || 'lastName' in value;
     default:
       return false;
   }
@@ -117,6 +123,93 @@ function transformToEmails(email) {
 }
 
 /**
+ * Transform a simple string into a PHONES composite object
+ * @param {string} phone - The phone number string
+ * @returns {object|null} PHONES composite object or null if invalid
+ */
+function transformToPhones(phone) {
+  if (!phone || typeof phone !== 'string') {
+    return null;
+  }
+
+  return {
+    primaryPhoneNumber: phone,
+    additionalPhones: null
+  };
+}
+
+/**
+ * Transform a value into a CURRENCY composite object
+ * Accepts: number, string like "$100" or "100 USD", or object
+ * @param {number|string|object} value - The currency value
+ * @param {string} defaultCurrency - Default currency code (default: 'USD')
+ * @returns {object|null} CURRENCY composite object or null if invalid
+ */
+function transformToCurrency(value, defaultCurrency = 'USD') {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  // Already structured
+  if (typeof value === 'object' && 'amountMicros' in value) {
+    return value;
+  }
+
+  let amount = value;
+  let currency = defaultCurrency;
+
+  if (typeof value === 'string') {
+    // Parse strings like "$100", "100 USD", "€50", "100"
+    const match = value.match(/^[$€£]?\s*([\d,.]+)\s*([A-Z]{3})?$/i);
+    if (match) {
+      amount = parseFloat(match[1].replace(/,/g, ''));
+      currency = match[2]?.toUpperCase() || defaultCurrency;
+    } else {
+      return null;
+    }
+  }
+
+  if (typeof amount === 'number' || !isNaN(parseFloat(amount))) {
+    return {
+      amountMicros: Math.round(parseFloat(amount) * 1000000),
+      currencyCode: currency
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Transform a value into a FULL_NAME composite object
+ * @param {string|object} value - Name string or object with firstName/lastName
+ * @returns {object|null} FULL_NAME composite object or null if invalid
+ */
+function transformToFullName(value) {
+  if (!value) {
+    return null;
+  }
+
+  // Already structured
+  if (typeof value === 'object' && ('firstName' in value || 'lastName' in value)) {
+    return {
+      firstName: value.firstName ?? '',
+      lastName: value.lastName ?? ''
+    };
+  }
+
+  // Parse string - split on first space
+  if (typeof value === 'string') {
+    const parts = value.trim().split(/\s+/);
+    return {
+      firstName: parts[0] || '',
+      lastName: parts.slice(1).join(' ') || ''
+    };
+  }
+
+  return null;
+}
+
+/**
  * Main transformation function for all composite fields
  * @param {object} data - The input data object
  * @param {string} entityType - The entity type ('company' or 'person')
@@ -171,6 +264,169 @@ function transformCompositeFields(data, entityType) {
   return transformed;
 }
 
+// =============================================================================
+// OBJECT NAME NORMALIZATION
+// Twenty's metadata API requires plural object names (namePlural format)
+// =============================================================================
+
+/**
+ * Normalize object name to plural form for metadata API
+ * Twenty CRM expects plural names: 'people' not 'person', 'companies' not 'company'
+ * @param {string} name - Object name (singular or plural)
+ * @returns {string} Plural form of the object name
+ */
+function normalizeObjectName(name) {
+  const singularToPlural = {
+    'person': 'people',
+    'company': 'companies',
+    'note': 'notes',
+    'task': 'tasks',
+    'opportunity': 'opportunities',
+    'activity': 'activities'
+  };
+  return singularToPlural[name] || name;
+}
+
+// =============================================================================
+// METADATA CACHE
+// Caches object field metadata to enable dynamic field type transformation
+// =============================================================================
+
+class MetadataCache {
+  constructor(ttlMs = 5 * 60 * 1000) { // 5 minute default TTL
+    this.cache = new Map();
+    this.ttlMs = ttlMs;
+  }
+
+  get(objectName) {
+    const entry = this.cache.get(objectName);
+    if (!entry) return null;
+    if (Date.now() > entry.expiresAt) {
+      this.cache.delete(objectName);
+      return null;
+    }
+    return entry.data;
+  }
+
+  set(objectName, data) {
+    this.cache.set(objectName, {
+      data,
+      expiresAt: Date.now() + this.ttlMs
+    });
+  }
+
+  clear() {
+    this.cache.clear();
+  }
+}
+
+// =============================================================================
+// DYNAMIC FIELD TRANSFORMATION
+// Transform fields based on their metadata type
+// =============================================================================
+
+/**
+ * Transform a field value based on its metadata type
+ * @param {string} fieldName - Name of the field
+ * @param {*} value - The value to transform
+ * @param {string} fieldType - The field type from metadata
+ * @returns {*} Transformed value
+ */
+function transformFieldByType(fieldName, value, fieldType) {
+  if (value === null || value === undefined) return value;
+
+  // Check if already a composite object
+  if (isCompositeObject(value, fieldType)) {
+    return value;
+  }
+
+  switch (fieldType) {
+    case 'LINKS':
+      return transformToLinks(value);
+    case 'ADDRESS':
+      return transformToAddress(value);
+    case 'EMAILS':
+      return transformToEmails(value);
+    case 'PHONES':
+      return transformToPhones(value);
+    case 'CURRENCY':
+      return transformToCurrency(value);
+    case 'FULL_NAME':
+      return transformToFullName(value);
+    // Pass through without transformation
+    case 'TEXT':
+    case 'NUMBER':
+    case 'BOOLEAN':
+    case 'DATE':
+    case 'DATE_TIME':
+    case 'UUID':
+    case 'RATING':
+    case 'SELECT':
+    case 'MULTI_SELECT':
+    case 'RELATION':
+    case 'RAW_JSON':
+    case 'RICH_TEXT':
+    case 'ARRAY':
+    case 'POSITION':
+    default:
+      return value;
+  }
+}
+
+/**
+ * Transform all fields in data object based on metadata
+ * @param {object} data - The input data object
+ * @param {Array} fieldMetadata - Array of field metadata from API
+ * @returns {object} Transformed data
+ */
+function transformFieldsWithMetadata(data, fieldMetadata) {
+  if (!data || !fieldMetadata || !Array.isArray(fieldMetadata)) {
+    return data;
+  }
+
+  const transformed = {};
+
+  // Build field type lookup from metadata
+  const fieldTypeMap = new Map();
+  for (const field of fieldMetadata) {
+    if (field.name && field.type) {
+      fieldTypeMap.set(field.name, field.type);
+    }
+  }
+
+  // Transform each field
+  for (const [key, value] of Object.entries(data)) {
+    const fieldType = fieldTypeMap.get(key);
+    if (fieldType) {
+      const transformedValue = transformFieldByType(key, value, fieldType);
+      if (transformedValue !== null) {
+        transformed[key] = transformedValue;
+      }
+      // Skip null results (invalid transformations)
+    } else {
+      // Unknown field - pass through (might be valid custom field)
+      transformed[key] = value;
+    }
+  }
+
+  return transformed;
+}
+
+/**
+ * Get structure hint for composite field types (for documentation)
+ */
+function getCompositeStructureHint(fieldType) {
+  const hints = {
+    LINKS: { primaryLinkUrl: "https://...", primaryLinkLabel: "Label" },
+    ADDRESS: { addressStreet1: "123 Main St", addressCity: "City", addressState: "State", addressPostcode: "12345", addressCountry: "Country" },
+    EMAILS: { primaryEmail: "email@example.com" },
+    PHONES: { primaryPhoneNumber: "+1234567890" },
+    CURRENCY: { amountMicros: 1000000, currencyCode: "USD" },
+    FULL_NAME: { firstName: "John", lastName: "Doe" }
+  };
+  return hints[fieldType] || null;
+}
+
 class TwentyCRMServer {
   constructor() {
     this.server = new Server(
@@ -187,12 +443,132 @@ class TwentyCRMServer {
 
     this.apiKey = process.env.TWENTY_API_KEY;
     this.baseUrl = process.env.TWENTY_BASE_URL || "https://api.twenty.com";
-    
+
     if (!this.apiKey) {
       throw new Error("TWENTY_API_KEY environment variable is required");
     }
 
+    // Initialize metadata cache for dynamic field type transformation
+    this.metadataCache = new MetadataCache();
+
     this.setupToolHandlers();
+  }
+
+  /**
+   * Fetch field metadata via GraphQL introspection (fallback when REST metadata API fails)
+   * @param {string} typeName - GraphQL type name (e.g., 'Company', 'Person')
+   * @returns {Promise<Array|null>} Array of field metadata or null if unavailable
+   */
+  async getFieldMetadataViaGraphQL(typeName) {
+    const query = `
+      query IntrospectType($typeName: String!) {
+        __type(name: $typeName) {
+          name
+          fields {
+            name
+            type {
+              name
+              kind
+              ofType { name kind }
+            }
+          }
+        }
+      }
+    `;
+
+    try {
+      const response = await fetch(`${this.baseUrl}/graphql`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query, variables: { typeName } })
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const result = await response.json();
+      const fields = result.data?.__type?.fields || [];
+
+      // Convert GraphQL introspection format to metadata format
+      return fields.map(field => {
+        const typeName = field.type.name || field.type.ofType?.name || field.type.kind;
+        // Map GraphQL types to Twenty field types
+        let fieldType = 'TEXT';
+        if (typeName === 'Links') fieldType = 'LINKS';
+        else if (typeName === 'Address') fieldType = 'ADDRESS';
+        else if (typeName === 'Emails') fieldType = 'EMAILS';
+        else if (typeName === 'Phones') fieldType = 'PHONES';
+        else if (typeName === 'Currency') fieldType = 'CURRENCY';
+        else if (typeName === 'FullName') fieldType = 'FULL_NAME';
+        else if (typeName?.endsWith('Enum')) fieldType = 'SELECT';
+        else if (typeName === 'Float' || typeName === 'Int') fieldType = 'NUMBER';
+        else if (typeName === 'Boolean') fieldType = 'BOOLEAN';
+        else if (typeName === 'DateTime') fieldType = 'DATE_TIME';
+        else if (typeName === 'UUID' || typeName === 'ID') fieldType = 'UUID';
+
+        return {
+          name: field.name,
+          type: fieldType,
+          graphqlType: typeName,
+          isNullable: field.type.kind !== 'NON_NULL'
+        };
+      });
+    } catch (error) {
+      console.error(`Failed to fetch metadata via GraphQL for ${typeName}: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Fetch and cache field metadata for an object type
+   * @param {string} objectName - The object type (e.g., 'companies', 'people')
+   * @returns {Promise<Array|null>} Array of field metadata or null if unavailable
+   */
+  async getFieldMetadata(objectName) {
+    // Normalize to plural form (Twenty API expects 'people', 'companies', etc.)
+    const normalizedName = normalizeObjectName(objectName);
+
+    // Check cache first
+    let metadata = this.metadataCache.get(normalizedName);
+    if (metadata) {
+      return metadata;
+    }
+
+    // Try REST metadata endpoint first
+    try {
+      const result = await this.makeRequest(`/rest/metadata/objects/${normalizedName}`);
+      const fields = result.data?.object?.fields || result.fields || [];
+      if (fields.length > 0) {
+        this.metadataCache.set(normalizedName, fields);
+        return fields;
+      }
+    } catch (error) {
+      // REST metadata endpoint failed, will try GraphQL fallback
+      console.error(`REST metadata failed for ${normalizedName}, trying GraphQL: ${error.message}`);
+    }
+
+    // Fallback to GraphQL introspection
+    // Map plural names to GraphQL type names
+    const graphqlTypeMap = {
+      'people': 'Person',
+      'companies': 'Company',
+      'notes': 'Note',
+      'tasks': 'Task',
+      'opportunities': 'Opportunity'
+    };
+    const graphqlTypeName = graphqlTypeMap[normalizedName] || normalizedName.charAt(0).toUpperCase() + normalizedName.slice(1, -1);
+
+    const graphqlMetadata = await this.getFieldMetadataViaGraphQL(graphqlTypeName);
+    if (graphqlMetadata && graphqlMetadata.length > 0) {
+      this.metadataCache.set(normalizedName, graphqlMetadata);
+      return graphqlMetadata;
+    }
+
+    return null;
   }
 
   async makeRequest(endpoint, method = "GET", data = null) {
@@ -231,7 +607,7 @@ class TwentyCRMServer {
           // People Management
           {
             name: "create_person",
-            description: "Create a new person in Twenty CRM",
+            description: "Create a new person in Twenty CRM. Supports standard fields and any custom fields. Use get_object_metadata('people') to discover all available fields.",
             inputSchema: {
               type: "object",
               properties: {
@@ -245,6 +621,7 @@ class TwentyCRMServer {
                 city: { type: "string", description: "City" },
                 avatarUrl: { type: "string", description: "Avatar image URL" }
               },
+              additionalProperties: true,
               required: ["firstName", "lastName"]
             }
           },
@@ -261,7 +638,7 @@ class TwentyCRMServer {
           },
           {
             name: "update_person",
-            description: "Update an existing person's information",
+            description: "Update an existing person's information. Supports standard fields and any custom fields. Use get_object_metadata('people') to discover all available fields.",
             inputSchema: {
               type: "object",
               properties: {
@@ -275,6 +652,7 @@ class TwentyCRMServer {
                 linkedinUrl: { type: "string", description: "LinkedIn profile URL - accepts string or LINKS object {primaryLinkUrl, primaryLinkLabel}" },
                 city: { type: "string", description: "City" }
               },
+              additionalProperties: true,
               required: ["id"]
             }
           },
@@ -306,7 +684,7 @@ class TwentyCRMServer {
           // Company Management
           {
             name: "create_company",
-            description: "Create a new company in Twenty CRM",
+            description: "Create a new company in Twenty CRM. Supports standard fields and any custom fields. Use get_object_metadata('companies') to discover all available fields.",
             inputSchema: {
               type: "object",
               properties: {
@@ -319,6 +697,7 @@ class TwentyCRMServer {
                 annualRecurringRevenue: { type: "number", description: "Annual recurring revenue" },
                 idealCustomerProfile: { type: "boolean", description: "Is this an ideal customer profile" }
               },
+              additionalProperties: true,
               required: ["name"]
             }
           },
@@ -335,7 +714,7 @@ class TwentyCRMServer {
           },
           {
             name: "update_company",
-            description: "Update an existing company's information",
+            description: "Update an existing company's information. Supports standard fields and any custom fields. Use get_object_metadata('companies') to discover all available fields.",
             inputSchema: {
               type: "object",
               properties: {
@@ -347,6 +726,7 @@ class TwentyCRMServer {
                 linkedinUrl: { type: "string", description: "LinkedIn company URL - accepts string or LINKS object {primaryLinkUrl, primaryLinkLabel}" },
                 annualRecurringRevenue: { type: "number", description: "Annual recurring revenue" }
               },
+              additionalProperties: true,
               required: ["id"]
             }
           },
@@ -630,7 +1010,17 @@ class TwentyCRMServer {
 
   // People methods
   async createPerson(data) {
-    const transformedData = transformCompositeFields(data, 'person');
+    // Try metadata-driven transformation first
+    const fieldMetadata = await this.getFieldMetadata('person');
+    let transformedData;
+
+    if (fieldMetadata && fieldMetadata.length > 0) {
+      transformedData = transformFieldsWithMetadata(data, fieldMetadata);
+    } else {
+      // Fallback to hardcoded composite field transformation
+      transformedData = transformCompositeFields(data, 'person');
+    }
+
     const result = await this.makeRequest("/rest/people", "POST", transformedData);
     return {
       content: [
@@ -656,7 +1046,18 @@ class TwentyCRMServer {
 
   async updatePerson(data) {
     const { id, ...updateData } = data;
-    const transformedData = transformCompositeFields(updateData, 'person');
+
+    // Try metadata-driven transformation first
+    const fieldMetadata = await this.getFieldMetadata('person');
+    let transformedData;
+
+    if (fieldMetadata && fieldMetadata.length > 0) {
+      transformedData = transformFieldsWithMetadata(updateData, fieldMetadata);
+    } else {
+      // Fallback to hardcoded composite field transformation
+      transformedData = transformCompositeFields(updateData, 'person');
+    }
+
     const result = await this.makeRequest(`/rest/people/${id}`, "PUT", transformedData);
     return {
       content: [
@@ -704,7 +1105,17 @@ class TwentyCRMServer {
 
   // Company methods
   async createCompany(data) {
-    const transformedData = transformCompositeFields(data, 'company');
+    // Try metadata-driven transformation first
+    const fieldMetadata = await this.getFieldMetadata('company');
+    let transformedData;
+
+    if (fieldMetadata && fieldMetadata.length > 0) {
+      transformedData = transformFieldsWithMetadata(data, fieldMetadata);
+    } else {
+      // Fallback to hardcoded composite field transformation
+      transformedData = transformCompositeFields(data, 'company');
+    }
+
     const result = await this.makeRequest("/rest/companies", "POST", transformedData);
     return {
       content: [
@@ -730,7 +1141,18 @@ class TwentyCRMServer {
 
   async updateCompany(data) {
     const { id, ...updateData } = data;
-    const transformedData = transformCompositeFields(updateData, 'company');
+
+    // Try metadata-driven transformation first
+    const fieldMetadata = await this.getFieldMetadata('company');
+    let transformedData;
+
+    if (fieldMetadata && fieldMetadata.length > 0) {
+      transformedData = transformFieldsWithMetadata(updateData, fieldMetadata);
+    } else {
+      // Fallback to hardcoded composite field transformation
+      transformedData = transformCompositeFields(updateData, 'company');
+    }
+
     const result = await this.makeRequest(`/rest/companies/${id}`, "PUT", transformedData);
     return {
       content: [
@@ -929,11 +1351,50 @@ class TwentyCRMServer {
 
   async getObjectMetadata(objectName) {
     const result = await this.makeRequest(`/rest/metadata/objects/${objectName}`);
+
+    // Cache the field metadata for future transformations
+    const fields = result.data?.object?.fields || result.fields || [];
+    if (fields.length > 0) {
+      this.metadataCache.set(objectName, fields);
+    }
+
+    // Format for AI readability
+    const formattedFields = fields.map(field => {
+      const info = {
+        name: field.name,
+        label: field.label,
+        type: field.type,
+        required: field.isNullable === false,
+      };
+
+      // Add options for SELECT/MULTI_SELECT
+      if (field.options && Array.isArray(field.options) && field.options.length > 0) {
+        info.options = field.options.map(o => o.value || o.label || o);
+      }
+
+      // Add structure hints for composite types
+      const structureHint = getCompositeStructureHint(field.type);
+      if (structureHint) {
+        info.structure = structureHint;
+        info.note = "Can pass simple value (e.g., string) - will be auto-transformed";
+      }
+
+      return info;
+    });
+
+    // Build summary text
+    const summary = formattedFields.map(f => {
+      let line = `- ${f.name} (${f.type})`;
+      if (f.required) line += ' [required]';
+      if (f.options) line += ` - options: ${f.options.join(', ')}`;
+      return line;
+    }).join('\n');
+
     return {
       content: [
         {
           type: "text",
-          text: `Metadata for ${objectName}: ${JSON.stringify(result, null, 2)}`
+          text: `Fields for ${objectName}:\n\n${summary}\n\nDetailed schema:\n${JSON.stringify(formattedFields, null, 2)}\n\nNote: For composite types (LINKS, ADDRESS, EMAILS, etc.), you can pass simple values that will be auto-transformed.`
         }
       ]
     };
