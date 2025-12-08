@@ -7,6 +7,170 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
+// =============================================================================
+// COMPOSITE FIELD TYPE TRANSFORMERS
+// Twenty CRM uses composite objects for certain field types (LINKS, ADDRESS, EMAILS)
+// These functions transform simple string inputs into the required structure
+// while also accepting pre-structured objects for flexibility
+// =============================================================================
+
+/**
+ * Check if a value is already a properly structured composite object
+ */
+function isCompositeObject(value, fieldType) {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+
+  switch (fieldType) {
+    case 'LINKS':
+      return 'primaryLinkUrl' in value;
+    case 'ADDRESS':
+      return 'addressStreet1' in value || 'addressCity' in value;
+    case 'EMAILS':
+      return 'primaryEmail' in value;
+    default:
+      return false;
+  }
+}
+
+/**
+ * Transform a simple string into a LINKS composite object
+ * @param {string} url - The URL string
+ * @returns {object|null} LINKS composite object or null if invalid
+ */
+function transformToLinks(url) {
+  if (!url || typeof url !== 'string') {
+    return null;
+  }
+
+  // Generate a label from the URL (domain name)
+  let label = url;
+  try {
+    const urlObj = new URL(url.startsWith('http') ? url : `https://${url}`);
+    label = urlObj.hostname.replace('www.', '');
+  } catch {
+    label = url;
+  }
+
+  return {
+    primaryLinkUrl: url.startsWith('http') ? url : `https://${url}`,
+    primaryLinkLabel: label
+  };
+}
+
+/**
+ * Transform a simple string or partial object into an ADDRESS composite object
+ * @param {string|object} address - The address string or partial object
+ * @returns {object|null} ADDRESS composite object or null if invalid
+ */
+function transformToAddress(address) {
+  if (address === null || address === undefined) {
+    return null;
+  }
+
+  // If already an object, merge with defaults (use ?? to allow empty strings)
+  if (typeof address === 'object') {
+    return {
+      addressStreet1: address.addressStreet1 ?? address.street1 ?? '',
+      addressStreet2: address.addressStreet2 ?? address.street2 ?? '',
+      addressCity: address.addressCity ?? address.city ?? '',
+      addressPostcode: address.addressPostcode ?? address.postcode ?? address.zip ?? '',
+      addressState: address.addressState ?? address.state ?? '',
+      addressCountry: address.addressCountry ?? address.country ?? '',
+      addressLat: address.addressLat ?? address.lat ?? null,
+      addressLng: address.addressLng ?? address.lng ?? null
+    };
+  }
+
+  // Simple string - put in street1
+  if (typeof address === 'string') {
+    return {
+      addressStreet1: address,
+      addressStreet2: '',
+      addressCity: '',
+      addressPostcode: '',
+      addressState: '',
+      addressCountry: '',
+      addressLat: null,
+      addressLng: null
+    };
+  }
+
+  // Unexpected type
+  return null;
+}
+
+/**
+ * Transform a simple string into an EMAILS composite object
+ * @param {string} email - The email string
+ * @returns {object|null} EMAILS composite object or null if invalid
+ */
+function transformToEmails(email) {
+  if (!email || typeof email !== 'string') {
+    return null;
+  }
+
+  return {
+    primaryEmail: email
+  };
+}
+
+/**
+ * Main transformation function for all composite fields
+ * @param {object} data - The input data object
+ * @param {string} entityType - The entity type ('company' or 'person')
+ * @returns {object} Transformed data with composite fields
+ */
+function transformCompositeFields(data, entityType) {
+  const transformed = { ...data };
+
+  // LINKS fields (company: domainName, linkedinUrl, xUrl; person: linkedinUrl)
+  const linksFields = entityType === 'company'
+    ? ['domainName', 'linkedinUrl', 'xUrl']
+    : ['linkedinUrl'];
+
+  for (const field of linksFields) {
+    if (field in transformed && transformed[field] !== undefined) {
+      if (!isCompositeObject(transformed[field], 'LINKS')) {
+        const transformedValue = transformToLinks(transformed[field]);
+        if (transformedValue !== null) {
+          transformed[field] = transformedValue;
+        } else {
+          // Remove invalid field to avoid API errors
+          delete transformed[field];
+        }
+      }
+    }
+  }
+
+  // ADDRESS field (company only)
+  if (entityType === 'company' && 'address' in transformed && transformed.address !== undefined) {
+    if (!isCompositeObject(transformed.address, 'ADDRESS')) {
+      const transformedValue = transformToAddress(transformed.address);
+      if (transformedValue !== null) {
+        transformed.address = transformedValue;
+      } else {
+        delete transformed.address;
+      }
+    }
+  }
+
+  // EMAILS field (person only)
+  if (entityType === 'person' && 'email' in transformed && transformed.email !== undefined) {
+    if (!isCompositeObject(transformed.email, 'EMAILS')) {
+      const transformedValue = transformToEmails(transformed.email);
+      if (transformedValue !== null) {
+        transformed.email = transformedValue;
+      } else {
+        delete transformed.email;
+      }
+    }
+  }
+
+  return transformed;
+}
+
 class TwentyCRMServer {
   constructor() {
     this.server = new Server(
@@ -73,11 +237,11 @@ class TwentyCRMServer {
               properties: {
                 firstName: { type: "string", description: "First name" },
                 lastName: { type: "string", description: "Last name" },
-                email: { type: "string", description: "Email address" },
+                email: { type: "string", description: "Email address - accepts string or EMAILS object {primaryEmail}" },
                 phone: { type: "string", description: "Phone number" },
                 jobTitle: { type: "string", description: "Job title" },
                 companyId: { type: "string", description: "Company ID to associate with" },
-                linkedinUrl: { type: "string", description: "LinkedIn profile URL" },
+                linkedinUrl: { type: "string", description: "LinkedIn profile URL - accepts string or LINKS object {primaryLinkUrl, primaryLinkLabel}" },
                 city: { type: "string", description: "City" },
                 avatarUrl: { type: "string", description: "Avatar image URL" }
               },
@@ -104,11 +268,11 @@ class TwentyCRMServer {
                 id: { type: "string", description: "Person ID" },
                 firstName: { type: "string", description: "First name" },
                 lastName: { type: "string", description: "Last name" },
-                email: { type: "string", description: "Email address" },
+                email: { type: "string", description: "Email address - accepts string or EMAILS object {primaryEmail}" },
                 phone: { type: "string", description: "Phone number" },
                 jobTitle: { type: "string", description: "Job title" },
                 companyId: { type: "string", description: "Company ID" },
-                linkedinUrl: { type: "string", description: "LinkedIn profile URL" },
+                linkedinUrl: { type: "string", description: "LinkedIn profile URL - accepts string or LINKS object {primaryLinkUrl, primaryLinkLabel}" },
                 city: { type: "string", description: "City" }
               },
               required: ["id"]
@@ -147,11 +311,11 @@ class TwentyCRMServer {
               type: "object",
               properties: {
                 name: { type: "string", description: "Company name" },
-                domainName: { type: "string", description: "Company domain" },
-                address: { type: "string", description: "Company address" },
+                domainName: { type: "string", description: "Company domain - accepts 'example.com' or LINKS object {primaryLinkUrl, primaryLinkLabel}" },
+                address: { type: "string", description: "Company address - accepts string or ADDRESS object {addressStreet1, addressCity, addressPostcode, addressState, addressCountry}" },
                 employees: { type: "number", description: "Number of employees" },
-                linkedinUrl: { type: "string", description: "LinkedIn company URL" },
-                xUrl: { type: "string", description: "X (Twitter) URL" },
+                linkedinUrl: { type: "string", description: "LinkedIn company URL - accepts string or LINKS object {primaryLinkUrl, primaryLinkLabel}" },
+                xUrl: { type: "string", description: "X (Twitter) URL - accepts string or LINKS object {primaryLinkUrl, primaryLinkLabel}" },
                 annualRecurringRevenue: { type: "number", description: "Annual recurring revenue" },
                 idealCustomerProfile: { type: "boolean", description: "Is this an ideal customer profile" }
               },
@@ -177,10 +341,10 @@ class TwentyCRMServer {
               properties: {
                 id: { type: "string", description: "Company ID" },
                 name: { type: "string", description: "Company name" },
-                domainName: { type: "string", description: "Company domain" },
-                address: { type: "string", description: "Company address" },
+                domainName: { type: "string", description: "Company domain - accepts 'example.com' or LINKS object {primaryLinkUrl, primaryLinkLabel}" },
+                address: { type: "string", description: "Company address - accepts string or ADDRESS object {addressStreet1, addressCity, addressPostcode, addressState, addressCountry}" },
                 employees: { type: "number", description: "Number of employees" },
-                linkedinUrl: { type: "string", description: "LinkedIn company URL" },
+                linkedinUrl: { type: "string", description: "LinkedIn company URL - accepts string or LINKS object {primaryLinkUrl, primaryLinkLabel}" },
                 annualRecurringRevenue: { type: "number", description: "Annual recurring revenue" }
               },
               required: ["id"]
@@ -466,7 +630,8 @@ class TwentyCRMServer {
 
   // People methods
   async createPerson(data) {
-    const result = await this.makeRequest("/rest/people", "POST", data);
+    const transformedData = transformCompositeFields(data, 'person');
+    const result = await this.makeRequest("/rest/people", "POST", transformedData);
     return {
       content: [
         {
@@ -491,7 +656,8 @@ class TwentyCRMServer {
 
   async updatePerson(data) {
     const { id, ...updateData } = data;
-    const result = await this.makeRequest(`/rest/people/${id}`, "PUT", updateData);
+    const transformedData = transformCompositeFields(updateData, 'person');
+    const result = await this.makeRequest(`/rest/people/${id}`, "PUT", transformedData);
     return {
       content: [
         {
@@ -538,7 +704,8 @@ class TwentyCRMServer {
 
   // Company methods
   async createCompany(data) {
-    const result = await this.makeRequest("/rest/companies", "POST", data);
+    const transformedData = transformCompositeFields(data, 'company');
+    const result = await this.makeRequest("/rest/companies", "POST", transformedData);
     return {
       content: [
         {
@@ -563,7 +730,8 @@ class TwentyCRMServer {
 
   async updateCompany(data) {
     const { id, ...updateData } = data;
-    const result = await this.makeRequest(`/rest/companies/${id}`, "PUT", updateData);
+    const transformedData = transformCompositeFields(updateData, 'company');
+    const result = await this.makeRequest(`/rest/companies/${id}`, "PUT", transformedData);
     return {
       content: [
         {
