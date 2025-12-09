@@ -944,6 +944,81 @@ class TwentyCRMServer {
             }
           },
 
+          // Opportunities Management
+          {
+            name: "create_opportunity",
+            description: "Create a new opportunity in Twenty CRM. Supports standard fields and any custom fields. Use get_object_metadata('opportunities') to discover all available fields.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                name: { type: "string", description: "Opportunity name" },
+                amount: { type: "number", description: "Deal amount - accepts number or CURRENCY object {amountMicros, currencyCode}" },
+                closeDate: { type: "string", description: "Expected close date (ISO 8601 format)" },
+                stage: { type: "string", description: "Pipeline stage" },
+                probability: { type: "number", description: "Win probability (0-100)" },
+                companyId: { type: "string", description: "Associated company ID" },
+                pointOfContactId: { type: "string", description: "Primary contact person ID" }
+              },
+              additionalProperties: true,
+              required: ["name"]
+            }
+          },
+          {
+            name: "get_opportunity",
+            description: "Get details of a specific opportunity by ID",
+            inputSchema: {
+              type: "object",
+              properties: {
+                id: { type: "string", description: "Opportunity ID" }
+              },
+              required: ["id"]
+            }
+          },
+          {
+            name: "update_opportunity",
+            description: "Update an existing opportunity. Supports standard fields and any custom fields. Use get_object_metadata('opportunities') to discover all available fields.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                id: { type: "string", description: "Opportunity ID" },
+                name: { type: "string", description: "Opportunity name" },
+                amount: { type: "number", description: "Deal amount - accepts number or CURRENCY object {amountMicros, currencyCode}" },
+                closeDate: { type: "string", description: "Expected close date (ISO 8601 format)" },
+                stage: { type: "string", description: "Pipeline stage" },
+                probability: { type: "number", description: "Win probability (0-100)" },
+                companyId: { type: "string", description: "Associated company ID" },
+                pointOfContactId: { type: "string", description: "Primary contact person ID" }
+              },
+              additionalProperties: true,
+              required: ["id"]
+            }
+          },
+          {
+            name: "list_opportunities",
+            description: "List opportunities with optional filtering and pagination",
+            inputSchema: {
+              type: "object",
+              properties: {
+                limit: { type: "number", description: "Number of results to return (default: 20)" },
+                offset: { type: "number", description: "Number of results to skip (default: 0)" },
+                search: { type: "string", description: "Search term for opportunity name" },
+                stage: { type: "string", description: "Filter by pipeline stage" },
+                companyId: { type: "string", description: "Filter by company ID" }
+              }
+            }
+          },
+          {
+            name: "delete_opportunity",
+            description: "Delete an opportunity from Twenty CRM",
+            inputSchema: {
+              type: "object",
+              properties: {
+                id: { type: "string", description: "Opportunity ID to delete" }
+              },
+              required: ["id"]
+            }
+          },
+
           // Metadata Operations
           {
             name: "get_metadata_objects",
@@ -1039,6 +1114,18 @@ class TwentyCRMServer {
             return await this.updateTask(args);
           case "delete_task":
             return await this.deleteTask(args.id);
+
+          // Opportunity operations
+          case "create_opportunity":
+            return await this.createOpportunity(args);
+          case "get_opportunity":
+            return await this.getOpportunity(args.id);
+          case "update_opportunity":
+            return await this.updateOpportunity(args);
+          case "list_opportunities":
+            return await this.listOpportunities(args);
+          case "delete_opportunity":
+            return await this.deleteOpportunity(args.id);
 
           // Metadata operations
           case "get_metadata_objects":
@@ -1248,6 +1335,104 @@ class TwentyCRMServer {
         {
           type: "text",
           text: `Successfully deleted company with ID: ${id}`
+        }
+      ]
+    };
+  }
+
+  // Opportunity methods
+  async createOpportunity(data) {
+    // Try metadata-driven transformation first
+    const fieldMetadata = await this.getFieldMetadata('opportunity');
+    let transformedData;
+
+    if (fieldMetadata && fieldMetadata.length > 0) {
+      transformedData = transformFieldsWithMetadata(data, fieldMetadata);
+    } else {
+      // Fallback to hardcoded composite field transformation
+      transformedData = transformCompositeFields(data, 'opportunity');
+    }
+
+    const result = await this.makeRequest("/rest/opportunities", "POST", transformedData);
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Created opportunity: ${JSON.stringify(result, null, 2)}`
+        }
+      ]
+    };
+  }
+
+  async getOpportunity(id) {
+    const result = await this.makeRequest(`/rest/opportunities/${id}`);
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Opportunity details: ${JSON.stringify(result, null, 2)}`
+        }
+      ]
+    };
+  }
+
+  async updateOpportunity(data) {
+    const { id, ...updateData } = data;
+
+    // Try metadata-driven transformation first
+    const fieldMetadata = await this.getFieldMetadata('opportunity');
+    let transformedData;
+
+    if (fieldMetadata && fieldMetadata.length > 0) {
+      transformedData = transformFieldsWithMetadata(updateData, fieldMetadata);
+    } else {
+      // Fallback to hardcoded composite field transformation
+      transformedData = transformCompositeFields(updateData, 'opportunity');
+    }
+
+    const result = await this.makeRequest(`/rest/opportunities/${id}`, "PUT", transformedData);
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Updated opportunity: ${JSON.stringify(result, null, 2)}`
+        }
+      ]
+    };
+  }
+
+  async listOpportunities(params = {}) {
+    const { limit = 20, offset = 0, search, stage, companyId } = params;
+    let endpoint = `/rest/opportunities?limit=${limit}&offset=${offset}`;
+
+    if (search) {
+      endpoint += `&search=${encodeURIComponent(search)}`;
+    }
+    if (stage) {
+      endpoint += `&filter[stage]=${encodeURIComponent(stage)}`;
+    }
+    if (companyId) {
+      endpoint += `&filter[companyId]=${encodeURIComponent(companyId)}`;
+    }
+
+    const result = await this.makeRequest(endpoint);
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Opportunities list: ${JSON.stringify(result, null, 2)}`
+        }
+      ]
+    };
+  }
+
+  async deleteOpportunity(id) {
+    await this.makeRequest(`/rest/opportunities/${id}`, "DELETE");
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Successfully deleted opportunity with ID: ${id}`
         }
       ]
     };
