@@ -783,14 +783,17 @@ class TwentyCRMServer {
           },
           {
             name: "list_people",
-            description: "List people with optional filtering and pagination",
+            description: "List people with optional filtering and cursor-based pagination. Returns people matching the filters and pagination info for fetching more results.",
             inputSchema: {
               type: "object",
               properties: {
-                limit: { type: "number", description: "Number of results to return (default: 20)" },
-                offset: { type: "number", description: "Number of results to skip (default: 0)" },
-                search: { type: "string", description: "Search term for name or email" },
-                companyId: { type: "string", description: "Filter by company ID" }
+                limit: { type: "number", description: "Number of results to return (default: 20, max: 100)" },
+                cursor: { type: "string", description: "Pagination cursor from previous response (pageInfo.endCursor) to get next page" },
+                search: { type: "string", description: "Search term for first name (partial match)" },
+                firstName: { type: "string", description: "Filter by first name (partial match)" },
+                lastName: { type: "string", description: "Filter by last name (partial match)" },
+                email: { type: "string", description: "Filter by email address (exact match)" },
+                companyId: { type: "string", description: "Filter by company ID (exact match)" }
               }
             }
           },
@@ -857,13 +860,15 @@ class TwentyCRMServer {
           },
           {
             name: "list_companies",
-            description: "List companies with optional filtering and pagination",
+            description: "List companies with optional filtering and cursor-based pagination. Returns companies matching the filters and pagination info for fetching more results.",
             inputSchema: {
               type: "object",
               properties: {
-                limit: { type: "number", description: "Number of results to return (default: 20)" },
-                offset: { type: "number", description: "Number of results to skip (default: 0)" },
-                search: { type: "string", description: "Search term for company name" }
+                limit: { type: "number", description: "Number of results to return (default: 20, max: 100)" },
+                cursor: { type: "string", description: "Pagination cursor from previous response (pageInfo.endCursor) to get next page" },
+                search: { type: "string", description: "Search term for company name (partial match)" },
+                name: { type: "string", description: "Filter by exact company name" },
+                domainName: { type: "string", description: "Filter by domain name (partial match)" }
               }
             }
           },
@@ -906,13 +911,13 @@ class TwentyCRMServer {
           },
           {
             name: "list_notes",
-            description: "List notes with optional filtering and pagination",
+            description: "List notes with optional filtering and cursor-based pagination. Returns notes matching the filters and pagination info for fetching more results.",
             inputSchema: {
               type: "object",
               properties: {
-                limit: { type: "number", description: "Number of results to return (default: 20)" },
-                offset: { type: "number", description: "Number of results to skip (default: 0)" },
-                search: { type: "string", description: "Search term for note title or content" }
+                limit: { type: "number", description: "Number of results to return (default: 20, max: 100)" },
+                cursor: { type: "string", description: "Pagination cursor from previous response (pageInfo.endCursor) to get next page" },
+                search: { type: "string", description: "Search term for note title (partial match)" }
               }
             }
           },
@@ -972,14 +977,15 @@ class TwentyCRMServer {
           },
           {
             name: "list_tasks",
-            description: "List tasks with optional filtering and pagination",
+            description: "List tasks with optional filtering and cursor-based pagination. Returns tasks matching the filters and pagination info for fetching more results.",
             inputSchema: {
               type: "object",
               properties: {
-                limit: { type: "number", description: "Number of results to return (default: 20)" },
-                offset: { type: "number", description: "Number of results to skip (default: 0)" },
-                status: { type: "string", description: "Filter by status", enum: ["TODO", "IN_PROGRESS", "DONE"] },
-                assigneeId: { type: "string", description: "Filter by assignee ID" }
+                limit: { type: "number", description: "Number of results to return (default: 20, max: 100)" },
+                cursor: { type: "string", description: "Pagination cursor from previous response (pageInfo.endCursor) to get next page" },
+                search: { type: "string", description: "Search term for task title (partial match)" },
+                status: { type: "string", description: "Filter by status (exact match)", enum: ["TODO", "IN_PROGRESS", "DONE"] },
+                assigneeId: { type: "string", description: "Filter by assignee ID (exact match)" }
               }
             }
           },
@@ -1062,15 +1068,15 @@ class TwentyCRMServer {
           },
           {
             name: "list_opportunities",
-            description: "List opportunities with optional filtering and pagination",
+            description: "List opportunities with optional filtering and cursor-based pagination. Returns opportunities matching the filters and pagination info for fetching more results.",
             inputSchema: {
               type: "object",
               properties: {
-                limit: { type: "number", description: "Number of results to return (default: 20)" },
-                offset: { type: "number", description: "Number of results to skip (default: 0)" },
-                search: { type: "string", description: "Search term for opportunity name" },
-                stage: { type: "string", description: "Filter by pipeline stage" },
-                companyId: { type: "string", description: "Filter by company ID" }
+                limit: { type: "number", description: "Number of results to return (default: 20, max: 100)" },
+                cursor: { type: "string", description: "Pagination cursor from previous response (pageInfo.endCursor) to get next page" },
+                search: { type: "string", description: "Search term for opportunity name (partial match)" },
+                stage: { type: "string", description: "Filter by pipeline stage (exact match)" },
+                companyId: { type: "string", description: "Filter by company ID (exact match)" }
               }
             }
           },
@@ -1110,19 +1116,60 @@ class TwentyCRMServer {
           // Search and Enrichment
           {
             name: "search_records",
-            description: "Search across multiple object types",
+            description: "Search across multiple object types using partial name matching. Searches by firstName for people, name for companies/opportunities, and title for notes/tasks.",
             inputSchema: {
               type: "object",
               properties: {
-                query: { type: "string", description: "Search query" },
-                objectTypes: { 
-                  type: "array", 
+                query: { type: "string", description: "Search query (partial match)" },
+                objectTypes: {
+                  type: "array",
                   items: { type: "string" },
-                  description: "Object types to search (e.g., ['people', 'companies'])" 
+                  description: "Object types to search (default: ['people', 'companies']). Options: people, companies, opportunities, notes, tasks"
                 },
-                limit: { type: "number", description: "Number of results per object type" }
+                limit: { type: "number", description: "Number of results per object type (default: 10)" }
               },
               required: ["query"]
+            }
+          },
+
+          // Find or Create tools
+          {
+            name: "find_or_create_company",
+            description: "Find an existing company by domain name or exact name, or create a new one if not found. Use domainName for reliable matching (unique). Returns the existing company if found, otherwise creates and returns the new company.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                name: { type: "string", description: "Company name (required)" },
+                domainName: { type: "string", description: "Company domain (e.g., 'acme.com') - used for matching existing companies" },
+                address: { type: "string", description: "Company address" },
+                employees: { type: "number", description: "Number of employees" },
+                linkedinUrl: { type: "string", description: "LinkedIn company URL" },
+                xUrl: { type: "string", description: "X (Twitter) URL" },
+                annualRecurringRevenue: { type: "number", description: "ARR in dollars" },
+                idealCustomerProfile: { type: "boolean", description: "Whether company is an ideal customer" }
+              },
+              additionalProperties: true,
+              required: ["name"]
+            }
+          },
+          {
+            name: "find_or_create_person",
+            description: "Find an existing person by email address, or create a new one if not found. Email is used for matching since it's typically unique. Returns the existing person if found, otherwise creates and returns the new person.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                firstName: { type: "string", description: "First name" },
+                lastName: { type: "string", description: "Last name" },
+                email: { type: "string", description: "Email address (required) - used for matching existing people" },
+                phone: { type: "string", description: "Phone number" },
+                jobTitle: { type: "string", description: "Job title" },
+                companyId: { type: "string", description: "Company ID to link person to" },
+                linkedinUrl: { type: "string", description: "LinkedIn profile URL" },
+                city: { type: "string", description: "City" },
+                avatarUrl: { type: "string", description: "Avatar/profile image URL" }
+              },
+              additionalProperties: true,
+              required: ["email"]
             }
           }
         ]
@@ -1204,6 +1251,12 @@ class TwentyCRMServer {
           case "search_records":
             return await this.searchRecords(args);
 
+          // Find or Create operations
+          case "find_or_create_company":
+            return await this.findOrCreateCompany(args);
+          case "find_or_create_person":
+            return await this.findOrCreatePerson(args);
+
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
@@ -1282,22 +1335,57 @@ class TwentyCRMServer {
   }
 
   async listPeople(params = {}) {
-    const { limit = 20, offset = 0, search, companyId } = params;
-    let endpoint = `/rest/people?limit=${limit}&offset=${offset}`;
-    
-    if (search) {
-      endpoint += `&search=${encodeURIComponent(search)}`;
+    const { limit = 20, cursor, search, companyId, email, firstName, lastName } = params;
+    // Validate and sanitize limit
+    const sanitizedLimit = Math.max(1, Math.min(100, parseInt(limit) || 20));
+    let endpoint = `/rest/people?limit=${sanitizedLimit}`;
+
+    // Cursor-based pagination
+    if (cursor) {
+      endpoint += `&starting_after=${encodeURIComponent(cursor)}`;
     }
+
+    // Filter by name (partial match on firstName)
+    if (search) {
+      endpoint += `&filter=name.firstName[ilike]:${encodeURIComponent('%' + search + '%')}`;
+    }
+
+    // Filter by first name (partial match)
+    if (firstName) {
+      endpoint += `&filter=name.firstName[ilike]:${encodeURIComponent('%' + firstName + '%')}`;
+    }
+
+    // Filter by last name (partial match)
+    if (lastName) {
+      endpoint += `&filter=name.lastName[ilike]:${encodeURIComponent('%' + lastName + '%')}`;
+    }
+
+    // Filter by email (exact match)
+    if (email) {
+      endpoint += `&filter=emails.primaryEmail[eq]:${encodeURIComponent(email)}`;
+    }
+
+    // Filter by company ID (exact match)
     if (companyId) {
-      endpoint += `&companyId=${companyId}`;
+      endpoint += `&filter=companyId[eq]:${encodeURIComponent(companyId)}`;
     }
 
     const result = await this.makeRequest(endpoint);
+
+    // Extract pagination info from response
+    const pageInfo = result.pageInfo || {};
+
     return {
       content: [
         {
           type: "text",
-          text: `People list: ${JSON.stringify(result, null, 2)}`
+          text: JSON.stringify({
+            people: result.data?.people || result.data || [],
+            pageInfo: {
+              hasNextPage: pageInfo.hasNextPage || false,
+              endCursor: pageInfo.endCursor || null
+            }
+          }, null, 2)
         }
       ]
     };
@@ -1377,19 +1465,47 @@ class TwentyCRMServer {
   }
 
   async listCompanies(params = {}) {
-    const { limit = 20, offset = 0, search } = params;
-    let endpoint = `/rest/companies?limit=${limit}&offset=${offset}`;
-    
+    const { limit = 20, cursor, search, domainName, name } = params;
+    // Validate and sanitize limit
+    const sanitizedLimit = Math.max(1, Math.min(100, parseInt(limit) || 20));
+    let endpoint = `/rest/companies?limit=${sanitizedLimit}`;
+
+    // Cursor-based pagination
+    if (cursor) {
+      endpoint += `&starting_after=${encodeURIComponent(cursor)}`;
+    }
+
+    // Filter by name (partial match)
     if (search) {
-      endpoint += `&search=${encodeURIComponent(search)}`;
+      endpoint += `&filter=name[ilike]:${encodeURIComponent('%' + search + '%')}`;
+    }
+
+    // Filter by exact name
+    if (name) {
+      endpoint += `&filter=name[eq]:${encodeURIComponent(name)}`;
+    }
+
+    // Filter by domain name (partial match on primaryLinkUrl)
+    if (domainName) {
+      endpoint += `&filter=domainName.primaryLinkUrl[ilike]:${encodeURIComponent('%' + domainName + '%')}`;
     }
 
     const result = await this.makeRequest(endpoint);
+
+    // Extract pagination info from response
+    const pageInfo = result.pageInfo || {};
+
     return {
       content: [
         {
           type: "text",
-          text: `Companies list: ${JSON.stringify(result, null, 2)}`
+          text: JSON.stringify({
+            companies: result.data?.companies || result.data || [],
+            pageInfo: {
+              hasNextPage: pageInfo.hasNextPage || false,
+              endCursor: pageInfo.endCursor || null
+            }
+          }, null, 2)
         }
       ]
     };
@@ -1469,25 +1585,47 @@ class TwentyCRMServer {
   }
 
   async listOpportunities(params = {}) {
-    const { limit = 20, offset = 0, search, stage, companyId } = params;
-    let endpoint = `/rest/opportunities?limit=${limit}&offset=${offset}`;
+    const { limit = 20, cursor, search, stage, companyId } = params;
+    // Validate and sanitize limit
+    const sanitizedLimit = Math.max(1, Math.min(100, parseInt(limit) || 20));
+    let endpoint = `/rest/opportunities?limit=${sanitizedLimit}`;
 
+    // Cursor-based pagination
+    if (cursor) {
+      endpoint += `&starting_after=${encodeURIComponent(cursor)}`;
+    }
+
+    // Filter by name (partial match)
     if (search) {
-      endpoint += `&search=${encodeURIComponent(search)}`;
+      endpoint += `&filter=name[ilike]:${encodeURIComponent('%' + search + '%')}`;
     }
+
+    // Filter by stage (exact match)
     if (stage) {
-      endpoint += `&filter[stage]=${encodeURIComponent(stage)}`;
+      endpoint += `&filter=stage[eq]:${encodeURIComponent(stage)}`;
     }
+
+    // Filter by company ID (exact match)
     if (companyId) {
-      endpoint += `&filter[companyId]=${encodeURIComponent(companyId)}`;
+      endpoint += `&filter=companyId[eq]:${encodeURIComponent(companyId)}`;
     }
 
     const result = await this.makeRequest(endpoint);
+
+    // Extract pagination info from response
+    const pageInfo = result.pageInfo || {};
+
     return {
       content: [
         {
           type: "text",
-          text: `Opportunities list: ${JSON.stringify(result, null, 2)}`
+          text: JSON.stringify({
+            opportunities: result.data?.opportunities || result.data || [],
+            pageInfo: {
+              hasNextPage: pageInfo.hasNextPage || false,
+              endCursor: pageInfo.endCursor || null
+            }
+          }, null, 2)
         }
       ]
     };
@@ -1531,19 +1669,37 @@ class TwentyCRMServer {
   }
 
   async listNotes(params = {}) {
-    const { limit = 20, offset = 0, search } = params;
-    let endpoint = `/rest/notes?limit=${limit}&offset=${offset}`;
-    
+    const { limit = 20, cursor, search } = params;
+    // Validate and sanitize limit
+    const sanitizedLimit = Math.max(1, Math.min(100, parseInt(limit) || 20));
+    let endpoint = `/rest/notes?limit=${sanitizedLimit}`;
+
+    // Cursor-based pagination
+    if (cursor) {
+      endpoint += `&starting_after=${encodeURIComponent(cursor)}`;
+    }
+
+    // Filter by title (partial match)
     if (search) {
-      endpoint += `&search=${encodeURIComponent(search)}`;
+      endpoint += `&filter=title[ilike]:${encodeURIComponent('%' + search + '%')}`;
     }
 
     const result = await this.makeRequest(endpoint);
+
+    // Extract pagination info from response
+    const pageInfo = result.pageInfo || {};
+
     return {
       content: [
         {
           type: "text",
-          text: `Notes list: ${JSON.stringify(result, null, 2)}`
+          text: JSON.stringify({
+            notes: result.data?.notes || result.data || [],
+            pageInfo: {
+              hasNextPage: pageInfo.hasNextPage || false,
+              endCursor: pageInfo.endCursor || null
+            }
+          }, null, 2)
         }
       ]
     };
@@ -1600,22 +1756,47 @@ class TwentyCRMServer {
   }
 
   async listTasks(params = {}) {
-    const { limit = 20, offset = 0, status, assigneeId } = params;
-    let endpoint = `/rest/tasks?limit=${limit}&offset=${offset}`;
-    
-    if (status) {
-      endpoint += `&status=${status}`;
+    const { limit = 20, cursor, search, status, assigneeId } = params;
+    // Validate and sanitize limit
+    const sanitizedLimit = Math.max(1, Math.min(100, parseInt(limit) || 20));
+    let endpoint = `/rest/tasks?limit=${sanitizedLimit}`;
+
+    // Cursor-based pagination
+    if (cursor) {
+      endpoint += `&starting_after=${encodeURIComponent(cursor)}`;
     }
+
+    // Filter by title (partial match)
+    if (search) {
+      endpoint += `&filter=title[ilike]:${encodeURIComponent('%' + search + '%')}`;
+    }
+
+    // Filter by status (exact match)
+    if (status) {
+      endpoint += `&filter=status[eq]:${encodeURIComponent(status)}`;
+    }
+
+    // Filter by assignee ID (exact match)
     if (assigneeId) {
-      endpoint += `&assigneeId=${assigneeId}`;
+      endpoint += `&filter=assigneeId[eq]:${encodeURIComponent(assigneeId)}`;
     }
 
     const result = await this.makeRequest(endpoint);
+
+    // Extract pagination info from response
+    const pageInfo = result.pageInfo || {};
+
     return {
       content: [
         {
           type: "text",
-          text: `Tasks list: ${JSON.stringify(result, null, 2)}`
+          text: JSON.stringify({
+            tasks: result.data?.tasks || result.data || [],
+            pageInfo: {
+              hasNextPage: pageInfo.hasNextPage || false,
+              endCursor: pageInfo.endCursor || null
+            }
+          }, null, 2)
         }
       ]
     };
@@ -1722,10 +1903,22 @@ class TwentyCRMServer {
     const { query, objectTypes = ['people', 'companies'], limit = 10 } = params;
     const results = {};
 
+    // Define the primary searchable field for each object type
+    const searchFieldMap = {
+      'people': 'name.firstName',
+      'companies': 'name',
+      'opportunities': 'name',
+      'notes': 'title',
+      'tasks': 'title'
+    };
+
     for (const objectType of objectTypes) {
       try {
-        const endpoint = `/rest/${objectType}?search=${encodeURIComponent(query)}&limit=${limit}`;
-        results[objectType] = await this.makeRequest(endpoint);
+        const searchField = searchFieldMap[objectType] || 'name';
+        const filter = `filter=${searchField}[ilike]:${encodeURIComponent('%' + query + '%')}`;
+        const endpoint = `/rest/${objectType}?${filter}&limit=${limit}`;
+        const result = await this.makeRequest(endpoint);
+        results[objectType] = result.data?.[objectType] || result.data || [];
       } catch (error) {
         results[objectType] = { error: error.message };
       }
@@ -1735,10 +1928,165 @@ class TwentyCRMServer {
       content: [
         {
           type: "text",
-          text: `Search results for "${query}": ${JSON.stringify(results, null, 2)}`
+          text: `Search results for "${query}":\n${JSON.stringify(results, null, 2)}`
         }
       ]
     };
+  }
+
+  // Find or Create methods
+  async findOrCreateCompany(data) {
+    const { domainName, name, ...otherData } = data;
+
+    // Step 1: Try to find existing company
+    let searchFilter = '';
+    let searchDescription = '';
+
+    if (domainName) {
+      // Clean domain - remove protocol and www prefix
+      const cleanDomain = domainName.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+      searchFilter = `filter=domainName.primaryLinkUrl[ilike]:${encodeURIComponent('%' + cleanDomain + '%')}`;
+      searchDescription = `domain "${cleanDomain}"`;
+    } else if (name) {
+      searchFilter = `filter=name[eq]:${encodeURIComponent(name)}`;
+      searchDescription = `name "${name}"`;
+    }
+
+    if (searchFilter) {
+      try {
+        const searchResult = await this.makeRequest(`/rest/companies?${searchFilter}&limit=1`);
+        const companies = searchResult.data?.companies || searchResult.data || [];
+
+        if (companies.length > 0) {
+          const existing = companies[0];
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  status: "found_existing",
+                  message: `Found existing company matching ${searchDescription}`,
+                  company: existing
+                }, null, 2)
+              }
+            ]
+          };
+        }
+      } catch (error) {
+        // Search failed, proceed to create
+        console.error(`Search failed: ${error.message}, proceeding to create`);
+      }
+    }
+
+    // Step 2: Create new company directly via API
+    try {
+      // Transform fields using metadata (same as createCompany)
+      const fieldMetadata = await this.getFieldMetadata('company');
+      let transformedData;
+
+      if (fieldMetadata && fieldMetadata.length > 0) {
+        transformedData = transformFieldsWithMetadata({ name, domainName, ...otherData }, fieldMetadata);
+      } else {
+        transformedData = transformCompositeFields({ name, domainName, ...otherData }, 'company');
+      }
+
+      const result = await this.makeRequest("/rest/companies", "POST", transformedData);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              status: "created_new",
+              message: "Created new company",
+              company: result
+            }, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              status: "error",
+              message: `Failed to create company: ${error.message}`
+            }, null, 2)
+          }
+        ]
+      };
+    }
+  }
+
+  async findOrCreatePerson(data) {
+    const { email, firstName, lastName, ...otherData } = data;
+
+    // Step 1: Try to find existing person by email
+    if (email) {
+      try {
+        const searchFilter = `filter=emails.primaryEmail[eq]:${encodeURIComponent(email)}`;
+        const searchResult = await this.makeRequest(`/rest/people?${searchFilter}&limit=1`);
+        const people = searchResult.data?.people || searchResult.data || [];
+
+        if (people.length > 0) {
+          const existing = people[0];
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  status: "found_existing",
+                  message: `Found existing person with email "${email}"`,
+                  person: existing
+                }, null, 2)
+              }
+            ]
+          };
+        }
+      } catch (error) {
+        // Search failed, proceed to create
+        console.error(`Search failed: ${error.message}, proceeding to create`);
+      }
+    }
+
+    // Step 2: Create new person directly via API
+    try {
+      // Transform fields using metadata (same as createPerson)
+      const fieldMetadata = await this.getFieldMetadata('person');
+      let transformedData;
+
+      if (fieldMetadata && fieldMetadata.length > 0) {
+        transformedData = transformFieldsWithMetadata({ firstName, lastName, email, ...otherData }, fieldMetadata);
+      } else {
+        transformedData = transformCompositeFields({ firstName, lastName, email, ...otherData }, 'person');
+      }
+
+      const result = await this.makeRequest("/rest/people", "POST", transformedData);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              status: "created_new",
+              message: "Created new person",
+              person: result
+            }, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              status: "error",
+              message: `Failed to create person: ${error.message}`
+            }, null, 2)
+          }
+        ]
+      };
+    }
   }
 
   async run() {
