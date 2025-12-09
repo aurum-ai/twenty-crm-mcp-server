@@ -513,6 +513,43 @@ class TwentyCRMServer {
   }
 
   /**
+   * Fetch enum values from GraphQL schema introspection
+   * @param {string} enumTypeName - The GraphQL enum type name (e.g., 'OpportunityStageEnum')
+   * @returns {Promise<Array>} Array of enum values with name and description
+   */
+  async getEnumValues(enumTypeName) {
+    const query = `
+      query GetEnumValues($typeName: String!) {
+        __type(name: $typeName) {
+          enumValues {
+            name
+            description
+          }
+        }
+      }
+    `;
+
+    try {
+      const response = await fetch(`${this.baseUrl}/graphql`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query, variables: { typeName: enumTypeName } })
+      });
+
+      if (!response.ok) return [];
+
+      const result = await response.json();
+      return result.data?.__type?.enumValues || [];
+    } catch (error) {
+      console.error(`Failed to fetch enum values for ${enumTypeName}: ${error.message}`);
+      return [];
+    }
+  }
+
+  /**
    * Fetch field metadata via GraphQL introspection (fallback when REST metadata API fails)
    * @param {string} typeName - GraphQL type name (e.g., 'Company', 'Person')
    * @returns {Promise<Array|null>} Array of field metadata or null if unavailable
@@ -549,32 +586,62 @@ class TwentyCRMServer {
       }
 
       const result = await response.json();
-      const fields = result.data?.__type?.fields || [];
+      const rawFields = result.data?.__type?.fields || [];
 
       // Convert GraphQL introspection format to metadata format
-      return fields.map(field => {
-        const typeName = field.type.name || field.type.ofType?.name || field.type.kind;
+      const fields = rawFields.map(field => {
+        const fieldTypeName = field.type.name || field.type.ofType?.name || field.type.kind;
         // Map GraphQL types to Twenty field types
         let fieldType = 'TEXT';
-        if (typeName === 'Links') fieldType = 'LINKS';
-        else if (typeName === 'Address') fieldType = 'ADDRESS';
-        else if (typeName === 'Emails') fieldType = 'EMAILS';
-        else if (typeName === 'Phones') fieldType = 'PHONES';
-        else if (typeName === 'Currency') fieldType = 'CURRENCY';
-        else if (typeName === 'FullName') fieldType = 'FULL_NAME';
-        else if (typeName?.endsWith('Enum')) fieldType = 'SELECT';
-        else if (typeName === 'Float' || typeName === 'Int') fieldType = 'NUMBER';
-        else if (typeName === 'Boolean') fieldType = 'BOOLEAN';
-        else if (typeName === 'DateTime') fieldType = 'DATE_TIME';
-        else if (typeName === 'UUID' || typeName === 'ID') fieldType = 'UUID';
+        if (fieldTypeName === 'Links') fieldType = 'LINKS';
+        else if (fieldTypeName === 'Address') fieldType = 'ADDRESS';
+        else if (fieldTypeName === 'Emails') fieldType = 'EMAILS';
+        else if (fieldTypeName === 'Phones') fieldType = 'PHONES';
+        else if (fieldTypeName === 'Currency') fieldType = 'CURRENCY';
+        else if (fieldTypeName === 'FullName') fieldType = 'FULL_NAME';
+        else if (fieldTypeName?.endsWith('Enum')) fieldType = 'SELECT';
+        else if (fieldTypeName === 'Float' || fieldTypeName === 'Int') fieldType = 'NUMBER';
+        else if (fieldTypeName === 'Boolean') fieldType = 'BOOLEAN';
+        else if (fieldTypeName === 'DateTime') fieldType = 'DATE_TIME';
+        else if (fieldTypeName === 'UUID' || fieldTypeName === 'ID') fieldType = 'UUID';
 
         return {
           name: field.name,
           type: fieldType,
-          graphqlType: typeName,
+          graphqlType: fieldTypeName,
           isNullable: field.type.kind !== 'NON_NULL'
         };
       });
+
+      // Fetch enum values for SELECT fields
+      const selectFields = fields.filter(f => f.type === 'SELECT' && f.graphqlType);
+      const enumTypeNames = [...new Set(selectFields.map(f => f.graphqlType))];
+
+      if (enumTypeNames.length > 0) {
+        // Fetch all enum values in parallel
+        const enumResults = await Promise.all(
+          enumTypeNames.map(async (enumTypeName) => ({
+            typeName: enumTypeName,
+            values: await this.getEnumValues(enumTypeName)
+          }))
+        );
+
+        // Build lookup map
+        const enumValuesMap = {};
+        enumResults.forEach(r => { enumValuesMap[r.typeName] = r.values; });
+
+        // Add options to SELECT fields
+        fields.forEach(field => {
+          if (field.type === 'SELECT' && field.graphqlType && enumValuesMap[field.graphqlType]) {
+            field.options = enumValuesMap[field.graphqlType].map(v => ({
+              value: v.name,
+              label: v.name
+            }));
+          }
+        });
+      }
+
+      return fields;
     } catch (error) {
       console.error(`Failed to fetch metadata via GraphQL for ${typeName}: ${error.message}`);
       return null;
