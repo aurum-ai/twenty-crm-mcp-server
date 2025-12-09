@@ -1113,6 +1113,71 @@ class TwentyCRMServer {
             }
           },
 
+          // Generic CRUD Operations (works with any object type including custom objects)
+          {
+            name: "create_record",
+            description: "Create a record of any object type (standard or custom). Use get_object_metadata to discover available fields. Supports composite field transformation.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                objectType: { type: "string", description: "Object type plural name (e.g., 'people', 'companies', 'noteTargets', or custom objects)" },
+                data: { type: "object", description: "Record data - field names and values", additionalProperties: true }
+              },
+              required: ["objectType", "data"]
+            }
+          },
+          {
+            name: "get_record",
+            description: "Get a single record by ID from any object type",
+            inputSchema: {
+              type: "object",
+              properties: {
+                objectType: { type: "string", description: "Object type plural name (e.g., 'people', 'companies')" },
+                id: { type: "string", description: "Record ID" }
+              },
+              required: ["objectType", "id"]
+            }
+          },
+          {
+            name: "update_record",
+            description: "Update any record by ID. Works with standard and custom objects. Use get_object_metadata to discover available fields.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                objectType: { type: "string", description: "Object type plural name (e.g., 'people', 'companies')" },
+                id: { type: "string", description: "Record ID" },
+                data: { type: "object", description: "Fields to update", additionalProperties: true }
+              },
+              required: ["objectType", "id", "data"]
+            }
+          },
+          {
+            name: "list_records",
+            description: "List records of any object type with optional filtering and pagination",
+            inputSchema: {
+              type: "object",
+              properties: {
+                objectType: { type: "string", description: "Object type plural name (e.g., 'people', 'companies', 'noteTargets')" },
+                limit: { type: "number", description: "Number of results (default: 20, max: 100)" },
+                cursor: { type: "string", description: "Pagination cursor from previous response" },
+                filter: { type: "object", description: "Filter conditions as {fieldName: value} pairs", additionalProperties: true }
+              },
+              required: ["objectType"]
+            }
+          },
+          {
+            name: "delete_record",
+            description: "Delete a record by ID from any object type",
+            inputSchema: {
+              type: "object",
+              properties: {
+                objectType: { type: "string", description: "Object type plural name (e.g., 'people', 'companies')" },
+                id: { type: "string", description: "Record ID" }
+              },
+              required: ["objectType", "id"]
+            }
+          },
+
           // Search and Enrichment
           {
             name: "search_records",
@@ -1246,6 +1311,18 @@ class TwentyCRMServer {
             return await this.getMetadataObjects();
           case "get_object_metadata":
             return await this.getObjectMetadata(args.objectName);
+
+          // Generic CRUD operations
+          case "create_record":
+            return await this.createRecord(args.objectType, args.data);
+          case "get_record":
+            return await this.getRecord(args.objectType, args.id);
+          case "update_record":
+            return await this.updateRecord(args.objectType, args.id, args.data);
+          case "list_records":
+            return await this.listRecords(args.objectType, args);
+          case "delete_record":
+            return await this.deleteRecord(args.objectType, args.id);
 
           // Search operations
           case "search_records":
@@ -1893,6 +1970,127 @@ class TwentyCRMServer {
         {
           type: "text",
           text: `Fields for ${normalizedName}:\n\n${summary}\n\nDetailed schema:\n${JSON.stringify(formattedFields, null, 2)}\n\nNote: For composite types (LINKS, ADDRESS, EMAILS, etc.), you can pass simple values that will be auto-transformed.`
+        }
+      ]
+    };
+  }
+
+  // Generic CRUD methods (work with any object type)
+  async createRecord(objectType, data) {
+    const normalizedType = normalizeObjectName(objectType);
+
+    // Try metadata-driven transformation
+    const fieldMetadata = await this.getFieldMetadata(objectType);
+    let transformedData;
+
+    if (fieldMetadata && fieldMetadata.length > 0) {
+      transformedData = transformFieldsWithMetadata(data, fieldMetadata);
+    } else {
+      // Pass through without transformation if no metadata
+      transformedData = data;
+    }
+
+    const result = await this.makeRequest(`/rest/${normalizedType}`, "POST", transformedData);
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Created ${objectType} record: ${JSON.stringify(result, null, 2)}`
+        }
+      ]
+    };
+  }
+
+  async getRecord(objectType, id) {
+    const normalizedType = normalizeObjectName(objectType);
+    const result = await this.makeRequest(`/rest/${normalizedType}/${id}`);
+    return {
+      content: [
+        {
+          type: "text",
+          text: `${objectType} record: ${JSON.stringify(result, null, 2)}`
+        }
+      ]
+    };
+  }
+
+  async updateRecord(objectType, id, data) {
+    const normalizedType = normalizeObjectName(objectType);
+
+    // Try metadata-driven transformation
+    const fieldMetadata = await this.getFieldMetadata(objectType);
+    let transformedData;
+
+    if (fieldMetadata && fieldMetadata.length > 0) {
+      transformedData = transformFieldsWithMetadata(data, fieldMetadata);
+    } else {
+      // Pass through without transformation if no metadata
+      transformedData = data;
+    }
+
+    const result = await this.makeRequest(`/rest/${normalizedType}/${id}`, "PUT", transformedData);
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Updated ${objectType} record: ${JSON.stringify(result, null, 2)}`
+        }
+      ]
+    };
+  }
+
+  async listRecords(objectType, params = {}) {
+    const normalizedType = normalizeObjectName(objectType);
+    const { limit = 20, cursor, filter } = params;
+    const sanitizedLimit = Math.max(1, Math.min(100, parseInt(limit) || 20));
+
+    let endpoint = `/rest/${normalizedType}?limit=${sanitizedLimit}`;
+
+    // Cursor-based pagination
+    if (cursor) {
+      endpoint += `&starting_after=${encodeURIComponent(cursor)}`;
+    }
+
+    // Build filter string from filter object
+    if (filter && typeof filter === 'object') {
+      const filterParts = [];
+      for (const [field, value] of Object.entries(filter)) {
+        if (value !== undefined && value !== null) {
+          filterParts.push(`${field}[eq]:${encodeURIComponent(value)}`);
+        }
+      }
+      if (filterParts.length > 0) {
+        endpoint += `&filter=${filterParts.join(',')}`;
+      }
+    }
+
+    const result = await this.makeRequest(endpoint);
+    const pageInfo = result.pageInfo || {};
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            records: result.data?.[normalizedType] || result.data || [],
+            pageInfo: {
+              hasNextPage: pageInfo.hasNextPage || false,
+              endCursor: pageInfo.endCursor || null
+            }
+          }, null, 2)
+        }
+      ]
+    };
+  }
+
+  async deleteRecord(objectType, id) {
+    const normalizedType = normalizeObjectName(objectType);
+    await this.makeRequest(`/rest/${normalizedType}/${id}`, "DELETE");
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Successfully deleted ${objectType} record with ID: ${id}`
         }
       ]
     };
