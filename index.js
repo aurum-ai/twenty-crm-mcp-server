@@ -249,15 +249,38 @@ function transformCompositeFields(data, entityType) {
     }
   }
 
-  // EMAILS field (person only)
-  if (entityType === 'person' && 'email' in transformed && transformed.email !== undefined) {
-    if (!isCompositeObject(transformed.email, 'EMAILS')) {
-      const transformedValue = transformToEmails(transformed.email);
-      if (transformedValue !== null) {
-        transformed.email = transformedValue;
-      } else {
-        delete transformed.email;
+  // Person-specific composite fields
+  if (entityType === 'person') {
+    // FULL_NAME field - combine firstName + lastName into name
+    if (('firstName' in transformed || 'lastName' in transformed) && !('name' in transformed)) {
+      transformed.name = transformToFullName({
+        firstName: transformed.firstName,
+        lastName: transformed.lastName
+      });
+      delete transformed.firstName;
+      delete transformed.lastName;
+    }
+
+    // EMAILS field - API uses 'emails' (plural)
+    if ('email' in transformed && transformed.email !== undefined) {
+      if (!isCompositeObject(transformed.email, 'EMAILS')) {
+        const transformedValue = transformToEmails(transformed.email);
+        if (transformedValue !== null) {
+          transformed.emails = transformedValue;
+        }
       }
+      delete transformed.email;
+    }
+
+    // PHONES field - API uses 'phones' (plural)
+    if ('phone' in transformed && transformed.phone !== undefined) {
+      if (!isCompositeObject(transformed.phone, 'PHONES')) {
+        const transformedValue = transformToPhones(transformed.phone);
+        if (transformedValue !== null) {
+          transformed.phones = transformedValue;
+        }
+      }
+      delete transformed.phone;
     }
   }
 
@@ -394,8 +417,43 @@ function transformFieldsWithMetadata(data, fieldMetadata) {
     }
   }
 
-  // Transform each field
+  // Handle special field aliases BEFORE processing regular fields
+  // These handle common user-friendly input names that map to API field names
+
+  // firstName + lastName → name (FULL_NAME)
+  if (('firstName' in data || 'lastName' in data) && fieldTypeMap.has('name')) {
+    transformed.name = transformToFullName({
+      firstName: data.firstName,
+      lastName: data.lastName
+    });
+  }
+
+  // email → emails (EMAILS) - singular to plural
+  if ('email' in data && fieldTypeMap.has('emails')) {
+    const transformedValue = transformFieldByType('emails', data.email, 'EMAILS');
+    if (transformedValue !== null) {
+      transformed.emails = transformedValue;
+    }
+  }
+
+  // phone → phones (PHONES) - singular to plural
+  if ('phone' in data && fieldTypeMap.has('phones')) {
+    const transformedValue = transformFieldByType('phones', data.phone, 'PHONES');
+    if (transformedValue !== null) {
+      transformed.phones = transformedValue;
+    }
+  }
+
+  // Fields to skip because they were handled as aliases above
+  const aliasedFields = ['firstName', 'lastName', 'email', 'phone'];
+
+  // Transform remaining fields
   for (const [key, value] of Object.entries(data)) {
+    // Skip aliased fields - already handled above
+    if (aliasedFields.includes(key)) {
+      continue;
+    }
+
     const fieldType = fieldTypeMap.get(key);
     if (fieldType) {
       const transformedValue = transformFieldByType(key, value, fieldType);
@@ -1350,12 +1408,19 @@ class TwentyCRMServer {
   }
 
   async getObjectMetadata(objectName) {
-    const result = await this.makeRequest(`/rest/metadata/objects/${objectName}`);
+    // Use getFieldMetadata which handles normalization and GraphQL fallback
+    const normalizedName = normalizeObjectName(objectName);
+    const fields = await this.getFieldMetadata(objectName);
 
-    // Cache the field metadata for future transformations
-    const fields = result.data?.object?.fields || result.fields || [];
-    if (fields.length > 0) {
-      this.metadataCache.set(objectName, fields);
+    if (!fields || fields.length === 0) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `No metadata found for object: ${objectName} (tried: ${normalizedName}). The object may not exist or metadata is unavailable.`
+          }
+        ]
+      };
     }
 
     // Format for AI readability
@@ -1394,7 +1459,7 @@ class TwentyCRMServer {
       content: [
         {
           type: "text",
-          text: `Fields for ${objectName}:\n\n${summary}\n\nDetailed schema:\n${JSON.stringify(formattedFields, null, 2)}\n\nNote: For composite types (LINKS, ADDRESS, EMAILS, etc.), you can pass simple values that will be auto-transformed.`
+          text: `Fields for ${normalizedName}:\n\n${summary}\n\nDetailed schema:\n${JSON.stringify(formattedFields, null, 2)}\n\nNote: For composite types (LINKS, ADDRESS, EMAILS, etc.), you can pass simple values that will be auto-transformed.`
         }
       ]
     };
