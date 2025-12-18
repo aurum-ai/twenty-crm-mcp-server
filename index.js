@@ -2101,9 +2101,10 @@ class TwentyCRMServer {
     const { query, objectTypes = ['people', 'companies'], limit = 10 } = params;
     const results = {};
 
-    // Define the primary searchable field for each object type
+    // Define the searchable field(s) for each object type
+    // Arrays = search multiple fields and merge results (for broader matching)
     const searchFieldMap = {
-      'people': 'name.firstName',
+      'people': ['name.firstName', 'name.lastName'],
       'companies': 'name',
       'opportunities': 'name',
       'notes': 'title',
@@ -2112,11 +2113,37 @@ class TwentyCRMServer {
 
     for (const objectType of objectTypes) {
       try {
-        const searchField = searchFieldMap[objectType] || 'name';
-        const filter = `filter=${searchField}[ilike]:${encodeURIComponent('%' + query + '%')}`;
-        const endpoint = `/rest/${objectType}?${filter}&limit=${limit}`;
-        const result = await this.makeRequest(endpoint);
-        results[objectType] = result.data?.[objectType] || result.data || [];
+        const searchFields = searchFieldMap[objectType] || 'name';
+
+        if (Array.isArray(searchFields)) {
+          // Multi-field search: split query into words and search each word in each field
+          const allResults = [];
+          const seenIds = new Set();
+          const queryWords = query.trim().split(/\s+/).filter(w => w.length > 0);
+
+          for (const field of searchFields) {
+            for (const word of queryWords) {
+              const filter = `filter=${field}[ilike]:${encodeURIComponent('%' + word + '%')}`;
+              const endpoint = `/rest/${objectType}?${filter}&limit=${limit}`;
+              const result = await this.makeRequest(endpoint);
+              const items = result.data?.[objectType] || result.data || [];
+
+              for (const item of items) {
+                if (!seenIds.has(item.id)) {
+                  seenIds.add(item.id);
+                  allResults.push(item);
+                }
+              }
+            }
+          }
+          results[objectType] = allResults;
+        } else {
+          // Single field search
+          const filter = `filter=${searchFields}[ilike]:${encodeURIComponent('%' + query + '%')}`;
+          const endpoint = `/rest/${objectType}?${filter}&limit=${limit}`;
+          const result = await this.makeRequest(endpoint);
+          results[objectType] = result.data?.[objectType] || result.data || [];
+        }
       } catch (error) {
         results[objectType] = { error: error.message };
       }
