@@ -732,19 +732,19 @@ class TwentyCRMServer {
           // People Management
           {
             name: "create_person",
-            description: "Create a new person in Twenty CRM. Supports standard fields and any custom fields. Use get_object_metadata('people') to discover all available fields.",
+            description: "Create person. Supports custom fields.",
             inputSchema: {
               type: "object",
               properties: {
                 firstName: { type: "string", description: "First name" },
                 lastName: { type: "string", description: "Last name" },
-                email: { type: "string", description: "Email address - accepts string or EMAILS object {primaryEmail}" },
-                phone: { type: "string", description: "Phone number" },
+                email: { type: "string", description: "Email (string or {primaryEmail})" },
+                phone: { type: "string", description: "Phone" },
                 jobTitle: { type: "string", description: "Job title" },
-                companyId: { type: "string", description: "Company ID to associate with" },
-                linkedinUrl: { type: "string", description: "LinkedIn profile URL - accepts string or LINKS object {primaryLinkUrl, primaryLinkLabel}" },
+                companyId: { type: "string", description: "Company ID" },
+                linkedinUrl: { type: "string", description: "LinkedIn URL (string or LINKS)" },
                 city: { type: "string", description: "City" },
-                avatarUrl: { type: "string", description: "Avatar image URL" }
+                avatarUrl: { type: "string", description: "Avatar URL" }
               },
               additionalProperties: true,
               required: ["firstName", "lastName"]
@@ -752,7 +752,7 @@ class TwentyCRMServer {
           },
           {
             name: "get_person",
-            description: "Get details of a specific person by ID",
+            description: "Get person by ID",
             inputSchema: {
               type: "object",
               properties: {
@@ -763,18 +763,18 @@ class TwentyCRMServer {
           },
           {
             name: "update_person",
-            description: "Update an existing person's information. Supports standard fields and any custom fields. Use get_object_metadata('people') to discover all available fields.",
+            description: "Update person. Supports custom fields.",
             inputSchema: {
               type: "object",
               properties: {
                 id: { type: "string", description: "Person ID" },
                 firstName: { type: "string", description: "First name" },
                 lastName: { type: "string", description: "Last name" },
-                email: { type: "string", description: "Email address - accepts string or EMAILS object {primaryEmail}" },
-                phone: { type: "string", description: "Phone number" },
+                email: { type: "string", description: "Email (string or {primaryEmail})" },
+                phone: { type: "string", description: "Phone" },
                 jobTitle: { type: "string", description: "Job title" },
                 companyId: { type: "string", description: "Company ID" },
-                linkedinUrl: { type: "string", description: "LinkedIn profile URL - accepts string or LINKS object {primaryLinkUrl, primaryLinkLabel}" },
+                linkedinUrl: { type: "string", description: "LinkedIn URL (string or LINKS)" },
                 city: { type: "string", description: "City" }
               },
               additionalProperties: true,
@@ -783,27 +783,27 @@ class TwentyCRMServer {
           },
           {
             name: "list_people",
-            description: "List people with optional filtering and cursor-based pagination. Returns people matching the filters and pagination info for fetching more results.",
+            description: "List/filter people with pagination.",
             inputSchema: {
               type: "object",
               properties: {
-                limit: { type: "number", description: "Number of results to return (default: 20, max: 100)" },
-                cursor: { type: "string", description: "Pagination cursor from previous response (pageInfo.endCursor) to get next page" },
-                search: { type: "string", description: "Search term for first name (partial match)" },
-                firstName: { type: "string", description: "Filter by first name (partial match)" },
-                lastName: { type: "string", description: "Filter by last name (partial match)" },
-                email: { type: "string", description: "Filter by email address (exact match)" },
-                companyId: { type: "string", description: "Filter by company ID (exact match)" }
+                limit: { type: "number", description: "Limit (default: 20, max: 100)" },
+                cursor: { type: "string", description: "Cursor from pageInfo.endCursor" },
+                search: { type: "string", description: "Search firstName" },
+                firstName: { type: "string", description: "Filter firstName" },
+                lastName: { type: "string", description: "Filter lastName" },
+                email: { type: "string", description: "Filter email (exact)" },
+                companyId: { type: "string", description: "Filter companyId (exact)" }
               }
             }
           },
           {
             name: "delete_person",
-            description: "Delete a person from Twenty CRM",
+            description: "Delete person by ID",
             inputSchema: {
               type: "object",
               properties: {
-                id: { type: "string", description: "Person ID to delete" }
+                id: { type: "string", description: "Person ID" }
               },
               required: ["id"]
             }
@@ -812,18 +812,18 @@ class TwentyCRMServer {
           // Company Management
           {
             name: "create_company",
-            description: "Create a new company in Twenty CRM. Supports standard fields and any custom fields. Use get_object_metadata('companies') to discover all available fields.",
+            description: "Create company. Supports custom fields.",
             inputSchema: {
               type: "object",
               properties: {
                 name: { type: "string", description: "Company name" },
-                domainName: { type: "string", description: "Company domain - accepts 'example.com' or LINKS object {primaryLinkUrl, primaryLinkLabel}" },
-                address: { type: "string", description: "Company address - accepts string or ADDRESS object {addressStreet1, addressCity, addressPostcode, addressState, addressCountry}" },
-                employees: { type: "number", description: "Number of employees" },
-                linkedinUrl: { type: "string", description: "LinkedIn company URL - accepts string or LINKS object {primaryLinkUrl, primaryLinkLabel}" },
-                xUrl: { type: "string", description: "X (Twitter) URL - accepts string or LINKS object {primaryLinkUrl, primaryLinkLabel}" },
-                annualRecurringRevenue: { type: "number", description: "Annual recurring revenue" },
-                idealCustomerProfile: { type: "boolean", description: "Is this an ideal customer profile" }
+                domainName: { type: "string", description: "Domain (string or LINKS)" },
+                address: { type: "string", description: "Address (string or ADDRESS)" },
+                employees: { type: "number", description: "Employee count" },
+                linkedinUrl: { type: "string", description: "LinkedIn URL (string or LINKS)" },
+                xUrl: { type: "string", description: "X/Twitter URL (string or LINKS)" },
+                annualRecurringRevenue: { type: "number", description: "ARR" },
+                idealCustomerProfile: { type: "boolean", description: "ICP flag" }
               },
               additionalProperties: true,
               required: ["name"]
@@ -831,7 +831,7 @@ class TwentyCRMServer {
           },
           {
             name: "get_company",
-            description: "Get details of a specific company by ID",
+            description: "Get company by ID",
             inputSchema: {
               type: "object",
               properties: {
@@ -842,17 +842,17 @@ class TwentyCRMServer {
           },
           {
             name: "update_company",
-            description: "Update an existing company's information. Supports standard fields and any custom fields. Use get_object_metadata('companies') to discover all available fields.",
+            description: "Update company. Supports custom fields.",
             inputSchema: {
               type: "object",
               properties: {
                 id: { type: "string", description: "Company ID" },
                 name: { type: "string", description: "Company name" },
-                domainName: { type: "string", description: "Company domain - accepts 'example.com' or LINKS object {primaryLinkUrl, primaryLinkLabel}" },
-                address: { type: "string", description: "Company address - accepts string or ADDRESS object {addressStreet1, addressCity, addressPostcode, addressState, addressCountry}" },
-                employees: { type: "number", description: "Number of employees" },
-                linkedinUrl: { type: "string", description: "LinkedIn company URL - accepts string or LINKS object {primaryLinkUrl, primaryLinkLabel}" },
-                annualRecurringRevenue: { type: "number", description: "Annual recurring revenue" }
+                domainName: { type: "string", description: "Domain (string or LINKS)" },
+                address: { type: "string", description: "Address (string or ADDRESS)" },
+                employees: { type: "number", description: "Employee count" },
+                linkedinUrl: { type: "string", description: "LinkedIn URL (string or LINKS)" },
+                annualRecurringRevenue: { type: "number", description: "ARR" }
               },
               additionalProperties: true,
               required: ["id"]
@@ -860,25 +860,25 @@ class TwentyCRMServer {
           },
           {
             name: "list_companies",
-            description: "List companies with optional filtering and cursor-based pagination. Returns companies matching the filters and pagination info for fetching more results.",
+            description: "List/filter companies with pagination.",
             inputSchema: {
               type: "object",
               properties: {
-                limit: { type: "number", description: "Number of results to return (default: 20, max: 100)" },
-                cursor: { type: "string", description: "Pagination cursor from previous response (pageInfo.endCursor) to get next page" },
-                search: { type: "string", description: "Search term for company name (partial match)" },
-                name: { type: "string", description: "Filter by exact company name" },
-                domainName: { type: "string", description: "Filter by domain name (partial match)" }
+                limit: { type: "number", description: "Limit (default: 20, max: 100)" },
+                cursor: { type: "string", description: "Cursor from pageInfo.endCursor" },
+                search: { type: "string", description: "Search name" },
+                name: { type: "string", description: "Filter name (exact)" },
+                domainName: { type: "string", description: "Filter domain" }
               }
             }
           },
           {
             name: "delete_company",
-            description: "Delete a company from Twenty CRM",
+            description: "Delete company by ID",
             inputSchema: {
               type: "object",
               properties: {
-                id: { type: "string", description: "Company ID to delete" }
+                id: { type: "string", description: "Company ID" }
               },
               required: ["id"]
             }
@@ -887,20 +887,20 @@ class TwentyCRMServer {
           // Notes Management
           {
             name: "create_note",
-            description: "Create a new note in Twenty CRM",
+            description: "Create note",
             inputSchema: {
               type: "object",
               properties: {
-                title: { type: "string", description: "Note title" },
-                body: { type: "string", description: "Note content" },
-                position: { type: "number", description: "Position for ordering" }
+                title: { type: "string", description: "Title" },
+                body: { type: "string", description: "Content" },
+                position: { type: "number", description: "Order position" }
               },
               required: ["title", "body"]
             }
           },
           {
             name: "get_note",
-            description: "Get details of a specific note by ID",
+            description: "Get note by ID",
             inputSchema: {
               type: "object",
               properties: {
@@ -911,37 +911,37 @@ class TwentyCRMServer {
           },
           {
             name: "list_notes",
-            description: "List notes with optional filtering and cursor-based pagination. Returns notes matching the filters and pagination info for fetching more results.",
+            description: "List/filter notes with pagination.",
             inputSchema: {
               type: "object",
               properties: {
-                limit: { type: "number", description: "Number of results to return (default: 20, max: 100)" },
-                cursor: { type: "string", description: "Pagination cursor from previous response (pageInfo.endCursor) to get next page" },
-                search: { type: "string", description: "Search term for note title (partial match)" }
+                limit: { type: "number", description: "Limit (default: 20, max: 100)" },
+                cursor: { type: "string", description: "Cursor from pageInfo.endCursor" },
+                search: { type: "string", description: "Search title" }
               }
             }
           },
           {
             name: "update_note",
-            description: "Update an existing note",
+            description: "Update note",
             inputSchema: {
               type: "object",
               properties: {
                 id: { type: "string", description: "Note ID" },
-                title: { type: "string", description: "Note title" },
-                body: { type: "string", description: "Note content" },
-                position: { type: "number", description: "Position for ordering" }
+                title: { type: "string", description: "Title" },
+                body: { type: "string", description: "Content" },
+                position: { type: "number", description: "Order position" }
               },
               required: ["id"]
             }
           },
           {
             name: "delete_note",
-            description: "Delete a note from Twenty CRM",
+            description: "Delete note by ID",
             inputSchema: {
               type: "object",
               properties: {
-                id: { type: "string", description: "Note ID to delete" }
+                id: { type: "string", description: "Note ID" }
               },
               required: ["id"]
             }
@@ -950,23 +950,23 @@ class TwentyCRMServer {
           // Tasks Management
           {
             name: "create_task",
-            description: "Create a new task in Twenty CRM",
+            description: "Create task",
             inputSchema: {
               type: "object",
               properties: {
-                title: { type: "string", description: "Task title" },
-                body: { type: "string", description: "Task description" },
-                dueAt: { type: "string", description: "Due date (ISO 8601 format)" },
-                status: { type: "string", description: "Task status", enum: ["TODO", "IN_PROGRESS", "DONE"] },
-                assigneeId: { type: "string", description: "ID of person assigned to task" },
-                position: { type: "number", description: "Position for ordering" }
+                title: { type: "string", description: "Title" },
+                body: { type: "string", description: "Description" },
+                dueAt: { type: "string", description: "Due date (ISO 8601)" },
+                status: { type: "string", description: "Status", enum: ["TODO", "IN_PROGRESS", "DONE"] },
+                assigneeId: { type: "string", description: "Assignee ID" },
+                position: { type: "number", description: "Order position" }
               },
               required: ["title"]
             }
           },
           {
             name: "get_task",
-            description: "Get details of a specific task by ID",
+            description: "Get task by ID",
             inputSchema: {
               type: "object",
               properties: {
@@ -977,41 +977,41 @@ class TwentyCRMServer {
           },
           {
             name: "list_tasks",
-            description: "List tasks with optional filtering and cursor-based pagination. Returns tasks matching the filters and pagination info for fetching more results.",
+            description: "List/filter tasks with pagination.",
             inputSchema: {
               type: "object",
               properties: {
-                limit: { type: "number", description: "Number of results to return (default: 20, max: 100)" },
-                cursor: { type: "string", description: "Pagination cursor from previous response (pageInfo.endCursor) to get next page" },
-                search: { type: "string", description: "Search term for task title (partial match)" },
-                status: { type: "string", description: "Filter by status (exact match)", enum: ["TODO", "IN_PROGRESS", "DONE"] },
-                assigneeId: { type: "string", description: "Filter by assignee ID (exact match)" }
+                limit: { type: "number", description: "Limit (default: 20, max: 100)" },
+                cursor: { type: "string", description: "Cursor from pageInfo.endCursor" },
+                search: { type: "string", description: "Search title" },
+                status: { type: "string", description: "Filter status", enum: ["TODO", "IN_PROGRESS", "DONE"] },
+                assigneeId: { type: "string", description: "Filter assignee" }
               }
             }
           },
           {
             name: "update_task",
-            description: "Update an existing task",
+            description: "Update task",
             inputSchema: {
               type: "object",
               properties: {
                 id: { type: "string", description: "Task ID" },
-                title: { type: "string", description: "Task title" },
-                body: { type: "string", description: "Task description" },
-                dueAt: { type: "string", description: "Due date (ISO 8601 format)" },
-                status: { type: "string", description: "Task status", enum: ["TODO", "IN_PROGRESS", "DONE"] },
-                assigneeId: { type: "string", description: "ID of person assigned to task" }
+                title: { type: "string", description: "Title" },
+                body: { type: "string", description: "Description" },
+                dueAt: { type: "string", description: "Due date (ISO 8601)" },
+                status: { type: "string", description: "Status", enum: ["TODO", "IN_PROGRESS", "DONE"] },
+                assigneeId: { type: "string", description: "Assignee ID" }
               },
               required: ["id"]
             }
           },
           {
             name: "delete_task",
-            description: "Delete a task from Twenty CRM",
+            description: "Delete task by ID",
             inputSchema: {
               type: "object",
               properties: {
-                id: { type: "string", description: "Task ID to delete" }
+                id: { type: "string", description: "Task ID" }
               },
               required: ["id"]
             }
@@ -1020,17 +1020,17 @@ class TwentyCRMServer {
           // Opportunities Management
           {
             name: "create_opportunity",
-            description: "Create a new opportunity in Twenty CRM. Supports standard fields and any custom fields. Use get_object_metadata('opportunities') to discover all available fields.",
+            description: "Create opportunity. Supports custom fields.",
             inputSchema: {
               type: "object",
               properties: {
-                name: { type: "string", description: "Opportunity name" },
-                amount: { type: "number", description: "Deal amount - accepts number or CURRENCY object {amountMicros, currencyCode}" },
-                closeDate: { type: "string", description: "Expected close date (ISO 8601 format)" },
+                name: { type: "string", description: "Name" },
+                amount: { type: "number", description: "Amount (number or CURRENCY)" },
+                closeDate: { type: "string", description: "Close date (ISO 8601)" },
                 stage: { type: "string", description: "Pipeline stage" },
                 probability: { type: "number", description: "Win probability (0-100)" },
-                companyId: { type: "string", description: "Associated company ID" },
-                pointOfContactId: { type: "string", description: "Primary contact person ID" }
+                companyId: { type: "string", description: "Company ID" },
+                pointOfContactId: { type: "string", description: "Contact person ID" }
               },
               additionalProperties: true,
               required: ["name"]
@@ -1038,7 +1038,7 @@ class TwentyCRMServer {
           },
           {
             name: "get_opportunity",
-            description: "Get details of a specific opportunity by ID",
+            description: "Get opportunity by ID",
             inputSchema: {
               type: "object",
               properties: {
@@ -1049,18 +1049,18 @@ class TwentyCRMServer {
           },
           {
             name: "update_opportunity",
-            description: "Update an existing opportunity. Supports standard fields and any custom fields. Use get_object_metadata('opportunities') to discover all available fields.",
+            description: "Update opportunity. Supports custom fields.",
             inputSchema: {
               type: "object",
               properties: {
                 id: { type: "string", description: "Opportunity ID" },
-                name: { type: "string", description: "Opportunity name" },
-                amount: { type: "number", description: "Deal amount - accepts number or CURRENCY object {amountMicros, currencyCode}" },
-                closeDate: { type: "string", description: "Expected close date (ISO 8601 format)" },
+                name: { type: "string", description: "Name" },
+                amount: { type: "number", description: "Amount (number or CURRENCY)" },
+                closeDate: { type: "string", description: "Close date (ISO 8601)" },
                 stage: { type: "string", description: "Pipeline stage" },
                 probability: { type: "number", description: "Win probability (0-100)" },
-                companyId: { type: "string", description: "Associated company ID" },
-                pointOfContactId: { type: "string", description: "Primary contact person ID" }
+                companyId: { type: "string", description: "Company ID" },
+                pointOfContactId: { type: "string", description: "Contact person ID" }
               },
               additionalProperties: true,
               required: ["id"]
@@ -1068,25 +1068,25 @@ class TwentyCRMServer {
           },
           {
             name: "list_opportunities",
-            description: "List opportunities with optional filtering and cursor-based pagination. Returns opportunities matching the filters and pagination info for fetching more results.",
+            description: "List/filter opportunities with pagination.",
             inputSchema: {
               type: "object",
               properties: {
-                limit: { type: "number", description: "Number of results to return (default: 20, max: 100)" },
-                cursor: { type: "string", description: "Pagination cursor from previous response (pageInfo.endCursor) to get next page" },
-                search: { type: "string", description: "Search term for opportunity name (partial match)" },
-                stage: { type: "string", description: "Filter by pipeline stage (exact match)" },
-                companyId: { type: "string", description: "Filter by company ID (exact match)" }
+                limit: { type: "number", description: "Limit (default: 20, max: 100)" },
+                cursor: { type: "string", description: "Cursor from pageInfo.endCursor" },
+                search: { type: "string", description: "Search name" },
+                stage: { type: "string", description: "Filter stage" },
+                companyId: { type: "string", description: "Filter company" }
               }
             }
           },
           {
             name: "delete_opportunity",
-            description: "Delete an opportunity from Twenty CRM",
+            description: "Delete opportunity by ID",
             inputSchema: {
               type: "object",
               properties: {
-                id: { type: "string", description: "Opportunity ID to delete" }
+                id: { type: "string", description: "Opportunity ID" }
               },
               required: ["id"]
             }
@@ -1095,7 +1095,7 @@ class TwentyCRMServer {
           // Metadata Operations
           {
             name: "get_metadata_objects",
-            description: "Get all object types and their metadata",
+            description: "List all object types",
             inputSchema: {
               type: "object",
               properties: {}
@@ -1103,36 +1103,36 @@ class TwentyCRMServer {
           },
           {
             name: "get_object_metadata",
-            description: "Get metadata for a specific object type",
+            description: "Get fields for object type",
             inputSchema: {
               type: "object",
               properties: {
-                objectName: { type: "string", description: "Object name (e.g., 'people', 'companies')" }
+                objectName: { type: "string", description: "Object name (people, companies, etc.)" }
               },
               required: ["objectName"]
             }
           },
 
-          // Generic CRUD Operations (works with any object type including custom objects)
+          // Generic CRUD (any object type)
           {
             name: "create_record",
-            description: "Create a record of any object type (standard or custom). Use get_object_metadata to discover available fields. Supports composite field transformation.",
+            description: "Create any record type",
             inputSchema: {
               type: "object",
               properties: {
-                objectType: { type: "string", description: "Object type plural name (e.g., 'people', 'companies', 'noteTargets', or custom objects)" },
-                data: { type: "object", description: "Record data - field names and values", additionalProperties: true }
+                objectType: { type: "string", description: "Object type (people, companies, noteTargets, etc.)" },
+                data: { type: "object", description: "Field values", additionalProperties: true }
               },
               required: ["objectType", "data"]
             }
           },
           {
             name: "get_record",
-            description: "Get a single record by ID from any object type",
+            description: "Get any record by ID",
             inputSchema: {
               type: "object",
               properties: {
-                objectType: { type: "string", description: "Object type plural name (e.g., 'people', 'companies')" },
+                objectType: { type: "string", description: "Object type" },
                 id: { type: "string", description: "Record ID" }
               },
               required: ["objectType", "id"]
@@ -1140,11 +1140,11 @@ class TwentyCRMServer {
           },
           {
             name: "update_record",
-            description: "Update any record by ID. Works with standard and custom objects. Use get_object_metadata to discover available fields.",
+            description: "Update any record",
             inputSchema: {
               type: "object",
               properties: {
-                objectType: { type: "string", description: "Object type plural name (e.g., 'people', 'companies')" },
+                objectType: { type: "string", description: "Object type" },
                 id: { type: "string", description: "Record ID" },
                 data: { type: "object", description: "Fields to update", additionalProperties: true }
               },
@@ -1153,65 +1153,65 @@ class TwentyCRMServer {
           },
           {
             name: "list_records",
-            description: "List records of any object type with optional filtering and pagination",
+            description: "List/filter any record type",
             inputSchema: {
               type: "object",
               properties: {
-                objectType: { type: "string", description: "Object type plural name (e.g., 'people', 'companies', 'noteTargets')" },
-                limit: { type: "number", description: "Number of results (default: 20, max: 100)" },
-                cursor: { type: "string", description: "Pagination cursor from previous response" },
-                filter: { type: "object", description: "Filter conditions as {fieldName: value} pairs", additionalProperties: true }
+                objectType: { type: "string", description: "Object type" },
+                limit: { type: "number", description: "Limit (default: 20, max: 100)" },
+                cursor: { type: "string", description: "Pagination cursor" },
+                filter: { type: "object", description: "Filter {field: value}", additionalProperties: true }
               },
               required: ["objectType"]
             }
           },
           {
             name: "delete_record",
-            description: "Delete a record by ID from any object type",
+            description: "Delete any record",
             inputSchema: {
               type: "object",
               properties: {
-                objectType: { type: "string", description: "Object type plural name (e.g., 'people', 'companies')" },
+                objectType: { type: "string", description: "Object type" },
                 id: { type: "string", description: "Record ID" }
               },
               required: ["objectType", "id"]
             }
           },
 
-          // Search and Enrichment
+          // Search
           {
             name: "search_records",
-            description: "Search across multiple object types using partial name matching. Searches by firstName for people, name for companies/opportunities, and title for notes/tasks.",
+            description: "Search across object types by name/title",
             inputSchema: {
               type: "object",
               properties: {
-                query: { type: "string", description: "Search query (partial match)" },
+                query: { type: "string", description: "Search query" },
                 objectTypes: {
                   type: "array",
                   items: { type: "string" },
-                  description: "Object types to search (default: ['people', 'companies']). Options: people, companies, opportunities, notes, tasks"
+                  description: "Types to search (default: people, companies)"
                 },
-                limit: { type: "number", description: "Number of results per object type (default: 10)" }
+                limit: { type: "number", description: "Results per type (default: 10)" }
               },
               required: ["query"]
             }
           },
 
-          // Find or Create tools
+          // Find or Create
           {
             name: "find_or_create_company",
-            description: "Find an existing company by domain name or exact name, or create a new one if not found. Use domainName for reliable matching (unique). Returns the existing company if found, otherwise creates and returns the new company.",
+            description: "Find by domain/name or create company",
             inputSchema: {
               type: "object",
               properties: {
-                name: { type: "string", description: "Company name (required)" },
-                domainName: { type: "string", description: "Company domain (e.g., 'acme.com') - used for matching existing companies" },
-                address: { type: "string", description: "Company address" },
-                employees: { type: "number", description: "Number of employees" },
-                linkedinUrl: { type: "string", description: "LinkedIn company URL" },
-                xUrl: { type: "string", description: "X (Twitter) URL" },
-                annualRecurringRevenue: { type: "number", description: "ARR in dollars" },
-                idealCustomerProfile: { type: "boolean", description: "Whether company is an ideal customer" }
+                name: { type: "string", description: "Company name" },
+                domainName: { type: "string", description: "Domain for matching" },
+                address: { type: "string", description: "Address" },
+                employees: { type: "number", description: "Employee count" },
+                linkedinUrl: { type: "string", description: "LinkedIn URL" },
+                xUrl: { type: "string", description: "X/Twitter URL" },
+                annualRecurringRevenue: { type: "number", description: "ARR" },
+                idealCustomerProfile: { type: "boolean", description: "ICP flag" }
               },
               additionalProperties: true,
               required: ["name"]
@@ -1219,19 +1219,19 @@ class TwentyCRMServer {
           },
           {
             name: "find_or_create_person",
-            description: "Find an existing person by email address, or create a new one if not found. Email is used for matching since it's typically unique. Returns the existing person if found, otherwise creates and returns the new person.",
+            description: "Find by email or create person",
             inputSchema: {
               type: "object",
               properties: {
                 firstName: { type: "string", description: "First name" },
                 lastName: { type: "string", description: "Last name" },
-                email: { type: "string", description: "Email address (required) - used for matching existing people" },
-                phone: { type: "string", description: "Phone number" },
+                email: { type: "string", description: "Email for matching" },
+                phone: { type: "string", description: "Phone" },
                 jobTitle: { type: "string", description: "Job title" },
-                companyId: { type: "string", description: "Company ID to link person to" },
-                linkedinUrl: { type: "string", description: "LinkedIn profile URL" },
+                companyId: { type: "string", description: "Company ID" },
+                linkedinUrl: { type: "string", description: "LinkedIn URL" },
                 city: { type: "string", description: "City" },
-                avatarUrl: { type: "string", description: "Avatar/profile image URL" }
+                avatarUrl: { type: "string", description: "Avatar URL" }
               },
               additionalProperties: true,
               required: ["email"]
